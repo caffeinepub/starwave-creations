@@ -111,6 +111,7 @@ export interface _SERVICE {
   'approveContent' : ActorMethod<[string, string], undefined>,
   'assignCallerUserRole' : ActorMethod<[Principal, UserRole], undefined>,
   'assignRole' : ActorMethod<[Principal, UserRole], undefined>,
+  'claimFirstAdmin' : ActorMethod<[], boolean>,
   'createCheckoutSession' : ActorMethod<
     [Array<ShoppingItem>, string, string],
     string
@@ -123,6 +124,8 @@ export interface _SERVICE {
   'deleteShortFilm' : ActorMethod<[string], undefined>,
   'editBook' : ActorMethod<[string, Book], undefined>,
   'editShortFilm' : ActorMethod<[string, ShortFilm], undefined>,
+  'fetchBooks' : ActorMethod<[], Array<Book>>,
+  'fetchShortFilms' : ActorMethod<[], Array<ShortFilm>>,
   'getAllBooks' : ActorMethod<[], Array<Book>>,
   'getAllPublishedContent' : ActorMethod<
     [],
@@ -144,6 +147,7 @@ export interface _SERVICE {
   'getShortFilm' : ActorMethod<[string], [] | [ShortFilm]>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
+  'hasAdminBeenAssigned' : ActorMethod<[], boolean>,
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
   'rejectContent' : ActorMethod<[string, string], undefined>,

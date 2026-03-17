@@ -103,12 +103,15 @@ export interface backendInterface {
     approveContent(id: string, contentType: string): Promise<void>;
     assignCallerUserRole(user: Principal, role: UserRole): Promise<void>;
     assignRole(user: Principal, role: UserRole): Promise<void>;
+    claimFirstAdmin(): Promise<boolean>;
     createCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string): Promise<string>;
     createStripeCheckoutSession(items: Array<ShoppingItem>, successUrl: string, cancelUrl: string, config: StripeConfiguration): Promise<string>;
     deleteBook(id: string): Promise<void>;
     deleteShortFilm(id: string): Promise<void>;
     editBook(id: string, book: Book): Promise<void>;
     editShortFilm(id: string, film: ShortFilm): Promise<void>;
+    fetchBooks(): Promise<Array<Book>>;
+    fetchShortFilms(): Promise<Array<ShortFilm>>;
     getAllBooks(): Promise<Array<Book>>;
     getAllPublishedContent(): Promise<{
         shortFilms: Array<ShortFilm>;
@@ -130,6 +133,7 @@ export interface backendInterface {
     getShortFilm(id: string): Promise<ShortFilm | null>;
     getStripeSessionStatus(sessionId: string): Promise<StripeSessionStatus>;
     getUserProfile(user: Principal): Promise<UserProfile | null>;
+    hasAdminBeenAssigned(): Promise<boolean>;
     isCallerAdmin(): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
     rejectContent(id: string, contentType: string): Promise<void>;

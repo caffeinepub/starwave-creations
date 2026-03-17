@@ -129,6 +129,7 @@ export const idlService = IDL.Service({
   'approveContent' : IDL.Func([IDL.Text, IDL.Text], [], []),
   'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
   'assignRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+  'claimFirstAdmin' : IDL.Func([], [IDL.Bool], []),
   'createCheckoutSession' : IDL.Func(
       [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
       [IDL.Text],
@@ -143,6 +144,8 @@ export const idlService = IDL.Service({
   'deleteShortFilm' : IDL.Func([IDL.Text], [], []),
   'editBook' : IDL.Func([IDL.Text, Book], [], []),
   'editShortFilm' : IDL.Func([IDL.Text, ShortFilm], [], []),
+  'fetchBooks' : IDL.Func([], [IDL.Vec(Book)], ['query']),
+  'fetchShortFilms' : IDL.Func([], [IDL.Vec(ShortFilm)], ['query']),
   'getAllBooks' : IDL.Func([], [IDL.Vec(Book)], ['query']),
   'getAllPublishedContent' : IDL.Func(
       [],
@@ -182,6 +185,7 @@ export const idlService = IDL.Service({
       [IDL.Opt(UserProfile)],
       ['query'],
     ),
+  'hasAdminBeenAssigned' : IDL.Func([], [IDL.Bool], ['query']),
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
   'rejectContent' : IDL.Func([IDL.Text, IDL.Text], [], []),
@@ -317,6 +321,7 @@ export const idlFactory = ({ IDL }) => {
     'approveContent' : IDL.Func([IDL.Text, IDL.Text], [], []),
     'assignCallerUserRole' : IDL.Func([IDL.Principal, UserRole], [], []),
     'assignRole' : IDL.Func([IDL.Principal, UserRole], [], []),
+    'claimFirstAdmin' : IDL.Func([], [IDL.Bool], []),
     'createCheckoutSession' : IDL.Func(
         [IDL.Vec(ShoppingItem), IDL.Text, IDL.Text],
         [IDL.Text],
@@ -331,6 +336,8 @@ export const idlFactory = ({ IDL }) => {
     'deleteShortFilm' : IDL.Func([IDL.Text], [], []),
     'editBook' : IDL.Func([IDL.Text, Book], [], []),
     'editShortFilm' : IDL.Func([IDL.Text, ShortFilm], [], []),
+    'fetchBooks' : IDL.Func([], [IDL.Vec(Book)], ['query']),
+    'fetchShortFilms' : IDL.Func([], [IDL.Vec(ShortFilm)], ['query']),
     'getAllBooks' : IDL.Func([], [IDL.Vec(Book)], ['query']),
     'getAllPublishedContent' : IDL.Func(
         [],
@@ -370,6 +377,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Opt(UserProfile)],
         ['query'],
       ),
+    'hasAdminBeenAssigned' : IDL.Func([], [IDL.Bool], ['query']),
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
     'rejectContent' : IDL.Func([IDL.Text, IDL.Text], [], []),

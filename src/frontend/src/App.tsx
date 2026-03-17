@@ -1,6 +1,11 @@
+import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
+import { Crown, Shield } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import type { UserRole } from "./backend";
+import { UserRole as UserRoleEnum } from "./backend";
 import Navbar from "./components/Navbar";
 import { useActor } from "./hooks/useActor";
 import { useInternetIdentity } from "./hooks/useInternetIdentity";
@@ -30,19 +35,73 @@ export default function App() {
   const { actor } = useActor();
   const { identity } = useInternetIdentity();
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [roleLoaded, setRoleLoaded] = useState(false);
+  const [adminAssigned, setAdminAssigned] = useState<boolean | null>(null);
+  const [isClaiming, setIsClaiming] = useState(false);
 
   useEffect(() => {
     if (actor && identity) {
-      actor
-        .getCallerUserRole()
-        .then(setUserRole)
-        .catch(() => {});
+      setRoleLoaded(false);
+      // Call both in parallel
+      Promise.all([actor.getCallerUserRole(), actor.hasAdminBeenAssigned()])
+        .then(([role, assigned]) => {
+          setUserRole(role as UserRole);
+          setAdminAssigned(assigned);
+          setRoleLoaded(true);
+        })
+        .catch(() => {
+          setUserRole(UserRoleEnum.guest);
+          setAdminAssigned(false);
+          setRoleLoaded(true);
+        });
     } else if (!identity) {
       setUserRole(null);
+      setAdminAssigned(null);
+      setRoleLoaded(false);
     }
   }, [actor, identity]);
 
+  const handleClaimAdmin = async () => {
+    if (!actor) return;
+    setIsClaiming(true);
+    try {
+      const result = await actor.claimFirstAdmin();
+      if (result === true) {
+        const [role, assigned] = await Promise.all([
+          actor.getCallerUserRole(),
+          actor.hasAdminBeenAssigned(),
+        ]);
+        setUserRole(role);
+        setAdminAssigned(assigned);
+        toast.success("You are now the admin! Opening Admin Dashboard...");
+        setPage({ name: "admin" });
+      } else {
+        toast.error("Admin has already been claimed by another user.");
+        const [role, assigned] = await Promise.all([
+          actor.getCallerUserRole(),
+          actor.hasAdminBeenAssigned(),
+        ]);
+        setUserRole(role);
+        setAdminAssigned(assigned);
+      }
+    } catch {
+      toast.error("Failed to claim admin. Please try again.");
+    } finally {
+      setIsClaiming(false);
+    }
+  };
+
   const navigate = (p: Page) => setPage(p);
+
+  // Show banner when:
+  // - user is signed in
+  // - role check has completed
+  // - admin has NOT been assigned yet (adminAssigned === false) OR user is still a guest
+  const showClaimBanner =
+    !!identity &&
+    roleLoaded &&
+    (adminAssigned === false || userRole === UserRoleEnum.guest) &&
+    userRole !== UserRoleEnum.admin;
 
   const renderPage = () => {
     switch (page.name) {
@@ -72,6 +131,47 @@ export default function App() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar navigate={navigate} currentPage={page.name} userRole={userRole} />
+
+      <AnimatePresence>
+        {showClaimBanner && (
+          <motion.div
+            key="claim-banner"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+            style={{ backgroundColor: "#fbbf24", color: "#1c1917" }}
+            className="relative z-40 shadow-lg"
+            data-ocid="admin.claim_banner"
+          >
+            <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-4">
+              <div className="flex items-center gap-3">
+                <Crown className="h-6 w-6 shrink-0 text-amber-900" />
+                <div>
+                  <p className="text-sm font-bold text-amber-950">
+                    🎬 No admin yet — be the first to claim admin access!
+                  </p>
+                  <p className="text-xs text-amber-800">
+                    Manage content, users, and revenue for STARWAVE CREATIONS.
+                  </p>
+                </div>
+              </div>
+              <Button
+                size="default"
+                onClick={handleClaimAdmin}
+                disabled={isClaiming}
+                style={{ backgroundColor: "#1c1917", color: "#fef3c7" }}
+                className="shrink-0 font-bold hover:opacity-90"
+                data-ocid="admin.claim.button"
+              >
+                <Shield className="h-4 w-4 mr-2" />
+                {isClaiming ? "Claiming..." : "Claim Admin Now"}
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <main>{renderPage()}</main>
       <Toaster />
     </div>

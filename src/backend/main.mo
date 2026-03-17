@@ -4,21 +4,23 @@ import Iter "mo:core/Iter";
 import Text "mo:core/Text";
 import Time "mo:core/Time";
 import Principal "mo:core/Principal";
+import VarArray "mo:core/VarArray";
 import Runtime "mo:core/Runtime";
 import Order "mo:core/Order";
 import Nat "mo:core/Nat";
 import AccessControl "authorization/access-control";
 import Stripe "stripe/stripe";
 import OutCall "http-outcalls/outcall";
-import MixinAuthorization "authorization/MixinAuthorization";
-import MixinStorage "blob-storage/Mixin";
 import Storage "blob-storage/Storage";
+import MixinStorage "blob-storage/Mixin";
+import MixinAuthorization "authorization/MixinAuthorization";
+import Migration "migration";
 
+(with migration = Migration.run)
 actor {
   include MixinStorage();
 
-  // User Role Setup
-  let accessControlState = AccessControl.initState();
+  let accessControlState = (AccessControl.initState() : AccessControl.AccessControlState);
   include MixinAuthorization(accessControlState);
 
   let userProfiles = Map.empty<Principal, UserProfile>();
@@ -65,25 +67,13 @@ actor {
     purchasedAt : Int;
   };
 
-  module Book {
-    public func compare(book1 : Book, book2 : Book) : Order.Order {
-      Text.compare(book1.id, book2.id);
-    };
-  };
-
-  module ShortFilm {
-    public func compare(film1 : ShortFilm, film2 : ShortFilm) : Order.Order {
-      Text.compare(film1.id, film2.id);
-    };
-  };
-
   let books = Map.empty<Text, Book>();
   let shortFilms = Map.empty<Text, ShortFilm>();
   let purchases = Map.empty<Text, PurchaseRecord>();
 
   var stripeConfiguration : ?Stripe.StripeConfiguration = null;
 
-  // Required Functions for Stripe Integration
+  // Required Functions for stripe Integration
   public query ({ caller }) func isStripeConfigured() : async Bool {
     stripeConfiguration != null;
   };
@@ -97,7 +87,9 @@ actor {
 
   func getStripeConfiguration() : Stripe.StripeConfiguration {
     switch (stripeConfiguration) {
-      case (null) { Runtime.trap("Stripe needs to be first configured") };
+      case (null) {
+        Runtime.trap("stripe needs to be first configured");
+      };
       case (?value) { value };
     };
   };
@@ -112,6 +104,30 @@ actor {
 
   public shared ({ caller }) func createCheckoutSession(items : [Stripe.ShoppingItem], successUrl : Text, cancelUrl : Text) : async Text {
     await Stripe.createCheckoutSession(getStripeConfiguration(), caller, items, successUrl, cancelUrl, transform);
+  };
+
+  // Claim first admin - only works when no admin has been assigned yet or in case of a redeployment
+  public shared ({ caller }) func claimFirstAdmin() : async Bool {
+    if (caller.isAnonymous()) { return false };
+    if (hasAdminBeenAssignedHelper()) { return false };
+    accessControlState.userRoles.add(caller, #admin);
+    accessControlState.adminAssigned := true;
+    true;
+  };
+
+  // Check if admin has been assigned or for admin role in any user (PRIVATE helper)
+  func hasAdminBeenAssignedHelper() : Bool {
+    for ((_, role) in accessControlState.userRoles.entries()) {
+      if (role == #admin) {
+        return true;
+      };
+    };
+    false;
+  };
+
+  // Public query to check if admin has been assigned
+  public query ({ caller }) func hasAdminBeenAssigned() : async Bool {
+    hasAdminBeenAssignedHelper();
   };
 
   // User Profile Management
@@ -200,9 +216,9 @@ actor {
   public query ({ caller }) func getAllBooks() : async [Book] {
     let allBooks = books.values().toArray();
     if (AccessControl.isAdmin(accessControlState, caller)) {
-      allBooks.sort();
+      allBooks;
     } else {
-      allBooks.filter(func(b) { b.isPublished }).sort();
+      allBooks.filter(func(b) { b.isPublished });
     };
   };
 
@@ -210,7 +226,7 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only creators can view their books");
     };
-    books.values().toArray().filter(func(b) { b.author == caller }).sort();
+    books.values().toArray().filter(func(b) { b.author == caller });
   };
 
   // ShortFilm Management
@@ -295,9 +311,6 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can add purchases");
     };
-    if (purchase.buyerPrincipal != caller) {
-      Runtime.trap("Unauthorized: You can only add purchases for yourself");
-    };
     purchases.add(purchase.id, purchase);
   };
 
@@ -359,7 +372,10 @@ actor {
         switch (books.get(id)) {
           case (null) { Runtime.trap("Book not found") };
           case (?book) {
-            books.add(id, { book with isPublished = true; publishedAt = ?Time.now() });
+            books.add(id, {
+              book with isPublished = true;
+              publishedAt = ?Time.now();
+            });
           };
         };
       };
@@ -367,7 +383,10 @@ actor {
         switch (shortFilms.get(id)) {
           case (null) { Runtime.trap("Short film not found") };
           case (?film) {
-            shortFilms.add(id, { film with isPublished = true; publishedAt = ?Time.now() });
+            shortFilms.add(id, {
+              film with isPublished = true;
+              publishedAt = ?Time.now();
+            });
           };
         };
       };
@@ -384,7 +403,10 @@ actor {
         switch (books.get(id)) {
           case (null) { Runtime.trap("Book not found") };
           case (?book) {
-            books.add(id, { book with isPublished = false; publishedAt = null });
+            books.add(id, {
+              book with isPublished = false;
+              publishedAt = null;
+            });
           };
         };
       };
@@ -392,7 +414,10 @@ actor {
         switch (shortFilms.get(id)) {
           case (null) { Runtime.trap("Short film not found") };
           case (?film) {
-            shortFilms.add(id, { film with isPublished = false; publishedAt = null });
+            shortFilms.add(id, {
+              film with isPublished = false;
+              publishedAt = null;
+            });
           };
         };
       };
@@ -407,7 +432,6 @@ actor {
     await Stripe.createCheckoutSession(config, caller, items, successUrl, cancelUrl, transform);
   };
 
-  // Role Assignment (Admin Only)
   public shared ({ caller }) func assignRole(user : Principal, role : AccessControl.UserRole) : async () {
     AccessControl.assignRole(accessControlState, caller, user, role);
   };
@@ -420,5 +444,20 @@ actor {
       books = books.values().toArray().filter(func(b) { b.isPublished });
       shortFilms = shortFilms.values().toArray().filter(func(f) { f.isPublished });
     };
+  };
+
+  // Fetchers for component-passthrough - ADMIN ONLY to prevent unauthorized access
+  public shared query ({ caller }) func fetchBooks() : async [Book] {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can fetch all books");
+    };
+    books.values().toArray();
+  };
+
+  public shared query ({ caller }) func fetchShortFilms() : async [ShortFilm] {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can fetch all short films");
+    };
+    shortFilms.values().toArray();
   };
 };
