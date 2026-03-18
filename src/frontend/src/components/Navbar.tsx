@@ -8,6 +8,8 @@ import {
   LogOut,
   Shield,
   Star,
+  User,
+  Users,
 } from "lucide-react";
 import type { Page } from "../App";
 import { UserRole } from "../backend";
@@ -62,6 +64,15 @@ export default function Navbar({
             <Film className="h-4 w-4" />
             <span className="hidden sm:inline">Films</span>
           </button>
+          <button
+            type="button"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${currentPage === "creators" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
+            onClick={() => navigate({ name: "creators" })}
+            data-ocid="nav.creators.link"
+          >
+            <Users className="h-4 w-4" />
+            <span className="hidden sm:inline">Creators</span>
+          </button>
           {identity && (
             <button
               type="button"
@@ -94,6 +105,17 @@ export default function Navbar({
             >
               <Shield className="h-4 w-4" />
               <span className="hidden sm:inline">Admin</span>
+            </button>
+          )}
+          {identity && (
+            <button
+              type="button"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm transition-colors ${currentPage === "profile" ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}
+              onClick={() => navigate({ name: "profile" })}
+              data-ocid="nav.profile.link"
+            >
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Profile</span>
             </button>
           )}
           {identity ? (

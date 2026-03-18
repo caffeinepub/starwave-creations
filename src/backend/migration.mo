@@ -1,22 +1,27 @@
 import Map "mo:core/Map";
-import Principal "mo:core/Principal";
+import Nat "mo:core/Nat";
+import Array "mo:core/Array";
+import Text "mo:core/Text";
 import Storage "blob-storage/Storage";
+import Principal "mo:core/Principal";
 import AccessControl "authorization/access-control";
 
 module {
-  type OldActor = {
-    accessControlState : AccessControl.AccessControlState;
-    userProfiles : Map.Map<Principal, { name : Text; role : Text }>;
-    books : Map.Map<Text, { id : Text; title : Text; description : Text; author : Principal; coverImageId : Storage.ExternalBlob; priceCents : Nat; genre : Text; publishedAt : ?Int; isPublished : Bool }>;
-    shortFilms : Map.Map<Text, { id : Text; title : Text; description : Text; director : Principal; videoId : Storage.ExternalBlob; thumbnailId : Storage.ExternalBlob; duration : Nat; genre : Text; publishedAt : ?Int; isPublished : Bool }>;
-    purchases : Map.Map<Text, { id : Text; bookId : Text; buyerPrincipal : Principal; creatorPrincipal : Principal; totalAmountCents : Nat; creatorShareCents : Nat; adminShareCents : Nat; stripePaymentIntentId : Text; purchasedAt : Int }>;
-    stripeConfiguration : ?{
-      secretKey : Text;
-      allowedCountries : [Text];
-    };
+  // Old types for migration context
+  type OldShortFilm = {
+    id : Text;
+    title : Text;
+    description : Text;
+    director : Principal;
+    videoId : Storage.ExternalBlob;
+    thumbnailId : Storage.ExternalBlob;
+    duration : Nat;
+    genre : Text;
+    publishedAt : ?Int;
+    isPublished : Bool;
   };
 
-  type Book = {
+  type OldBook = {
     id : Text;
     title : Text;
     description : Text;
@@ -28,17 +33,70 @@ module {
     isPublished : Bool;
   };
 
-  type NewActor = {
-    accessControlState : AccessControl.AccessControlState;
-    userProfiles : Map.Map<Principal, { name : Text; role : Text }>;
-    books : Map.Map<Text, Book>;
-    shortFilms : Map.Map<Text, { id : Text; title : Text; description : Text; director : Principal; videoId : Storage.ExternalBlob; thumbnailId : Storage.ExternalBlob; duration : Nat; genre : Text; publishedAt : ?Int; isPublished : Bool }>;
-    purchases : Map.Map<Text, { id : Text; bookId : Text; buyerPrincipal : Principal; creatorPrincipal : Principal; totalAmountCents : Nat; creatorShareCents : Nat; adminShareCents : Nat; stripePaymentIntentId : Text; purchasedAt : Int }>;
-    stripeConfiguration : ?{
-      secretKey : Text;
-      allowedCountries : [Text];
-    };
+  type OldUserProfile = {
+    name : Text;
+    role : Text;
   };
 
-  public func run(old : OldActor) : NewActor { old };
+  type OldActor = {
+    accessControlState : AccessControl.AccessControlState;
+    stripeConfiguration : ?{ secretKey : Text; allowedCountries : [Text] };
+    userProfiles : Map.Map<Principal, OldUserProfile>;
+    books : Map.Map<Text, OldBook>;
+    shortFilms : Map.Map<Text, OldShortFilm>;
+  };
+
+  // New types
+  type NewUserProfile = {
+    name : Text;
+    role : Text;
+    phone : ?Text;
+    email : ?Text;
+  };
+
+  type NewBook = {
+    id : Text;
+    title : Text;
+    description : Text;
+    author : Principal;
+    coverImageId : Storage.ExternalBlob;
+    priceCents : Nat;
+    genre : Text;
+    publishedAt : ?Int;
+    isPublished : Bool;
+    offlineLocation : ?Text;
+  };
+
+  type NewActor = {
+    accessControlState : AccessControl.AccessControlState;
+    stripeConfiguration : ?{ secretKey : Text; allowedCountries : [Text] };
+    userProfiles : Map.Map<Principal, NewUserProfile>;
+    books : Map.Map<Text, NewBook>;
+    shortFilms : Map.Map<Text, OldShortFilm>;
+  };
+
+  public func run(old : OldActor) : NewActor {
+    let newAccessControlState = old.accessControlState;
+    let newUserProfiles = old.userProfiles.map<Principal, OldUserProfile, NewUserProfile>(
+      func(_principal, oldProfile) {
+        {
+          oldProfile with
+          phone = null;
+          email = null;
+        };
+      }
+    );
+
+    let newBooks = old.books.map<Text, OldBook, NewBook>(
+      func(_text, oldBook) {
+        {
+          oldBook with
+          offlineLocation = null;
+        };
+      }
+    );
+    {
+      old with userProfiles = newUserProfiles; books = newBooks;
+    };
+  };
 };

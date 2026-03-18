@@ -12,24 +12,38 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Principal } from "@dfinity/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  BookOpen,
   CheckCircle,
+  Copy,
   DollarSign,
+  Film,
   Loader2,
   Settings,
   Shield,
+  Trash2,
+  UserPlus,
+  Users,
   XCircle,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Page } from "../App";
 import type { StripeConfiguration } from "../backend";
+import { UserRole } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
 
 interface AdminDashboardProps {
   navigate: (p: Page) => void;
+}
+
+interface UserProfileEntry {
+  principal: Principal;
+  name: string;
+  role: string;
 }
 
 export default function AdminDashboard({
@@ -40,6 +54,9 @@ export default function AdminDashboard({
   const queryClient = useQueryClient();
   const [stripeKey, setStripeKey] = useState("");
   const [isSavingStripe, setIsSavingStripe] = useState(false);
+  const [principalInput, setPrincipalInput] = useState("");
+  const [isAssigningAdmin, setIsAssigningAdmin] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: isAdmin } = useQuery({
     queryKey: ["is-admin"],
@@ -65,6 +82,18 @@ export default function AdminDashboard({
     enabled: !!actor && !!identity && !!isAdmin,
   });
 
+  const { data: allUserProfiles = [], isLoading: loadingProfiles } = useQuery<
+    UserProfileEntry[]
+  >({
+    queryKey: ["all-user-profiles"],
+    queryFn: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (actor as any).getAllUserProfiles();
+      return result ?? [];
+    },
+    enabled: !!actor && !!identity && !!isAdmin,
+  });
+
   const approveMutation = useMutation({
     mutationFn: ({ id, type }: { id: string; type: string }) =>
       actor!.approveContent(id, type),
@@ -87,22 +116,88 @@ export default function AdminDashboard({
     onError: () => toast.error("Failed to reject."),
   });
 
+  const handleDeleteBook = async (id: string) => {
+    if (!actor) return;
+    if (!window.confirm("Delete this book permanently? This cannot be undone."))
+      return;
+    setDeletingId(id);
+    try {
+      await actor.deleteBook(id);
+      queryClient.invalidateQueries({ queryKey: ["all-books"] });
+      toast.success("Book deleted.");
+    } catch {
+      toast.error("Failed to delete book.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteFilm = async (id: string) => {
+    if (!actor) return;
+    if (!window.confirm("Delete this film permanently? This cannot be undone."))
+      return;
+    setDeletingId(id);
+    try {
+      await actor.deleteShortFilm(id);
+      queryClient.invalidateQueries({ queryKey: ["all-films"] });
+      toast.success("Film deleted.");
+    } catch {
+      toast.error("Failed to delete film.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const handleSaveStripe = async () => {
     if (!actor || !stripeKey) return;
     setIsSavingStripe(true);
     try {
       const config: StripeConfiguration = {
         secretKey: stripeKey,
-        allowedCountries: ["US", "GB", "CA", "AU"],
+        allowedCountries: ["IN", "US", "GB", "CA", "AU"],
       };
       await actor.setStripeConfiguration(config);
-      toast.success("Stripe configured!");
+      toast.success(
+        "Stripe configured! UPI payments (PhonePe, Google Pay, Paytm) are now enabled for India.",
+      );
       setStripeKey("");
     } catch {
       toast.error("Failed to save Stripe config.");
     } finally {
       setIsSavingStripe(false);
     }
+  };
+
+  const handleMakeAdmin = async () => {
+    if (!actor) return;
+    if (!principalInput.trim()) {
+      toast.error("Please enter a Principal ID");
+      return;
+    }
+    let principal: Principal;
+    try {
+      principal = Principal.fromText(principalInput.trim());
+    } catch {
+      toast.error("Invalid Principal ID format");
+      return;
+    }
+    setIsAssigningAdmin(true);
+    try {
+      await actor.assignRole(principal, UserRole.admin);
+      toast.success("Admin access granted!");
+      setPrincipalInput("");
+    } catch {
+      toast.error(
+        "Failed to assign admin role. Make sure the Principal ID is correct.",
+      );
+    } finally {
+      setIsAssigningAdmin(false);
+    }
+  };
+
+  const handleCopyPrincipal = (principalStr: string) => {
+    navigator.clipboard.writeText(principalStr);
+    toast.success("Principal ID copied!");
   };
 
   const totalRevenue = allPurchases.reduce(
@@ -173,17 +268,28 @@ export default function AdminDashboard({
         </div>
       </div>
       <Tabs defaultValue="content">
-        <TabsList className="mb-6" data-ocid="admin.tabs.tab">
+        <TabsList className="mb-6 flex-wrap h-auto" data-ocid="admin.tabs.tab">
           <TabsTrigger value="content">Content Review</TabsTrigger>
+          <TabsTrigger value="all-content">All Content</TabsTrigger>
           <TabsTrigger value="purchases">
             <DollarSign className="h-4 w-4 mr-1" />
             Purchases
+          </TabsTrigger>
+          <TabsTrigger value="users" data-ocid="admin.users.tab">
+            <Users className="h-4 w-4 mr-1" />
+            Users
           </TabsTrigger>
           <TabsTrigger value="stripe">
             <Settings className="h-4 w-4 mr-1" />
             Stripe
           </TabsTrigger>
+          <TabsTrigger value="team" data-ocid="admin.team.tab">
+            <UserPlus className="h-4 w-4 mr-1" />
+            Team
+          </TabsTrigger>
         </TabsList>
+
+        {/* Pending Review Tab */}
         <TabsContent value="content">
           <h2 className="font-semibold text-lg mb-4">
             Pending Review ({pendingBooks.length + pendingFilms.length})
@@ -241,6 +347,19 @@ export default function AdminDashboard({
                       <XCircle className="h-4 w-4 mr-1" />
                       Reject
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      onClick={() => handleDeleteBook(book.id)}
+                      disabled={deletingId === book.id}
+                    >
+                      {deletingId === book.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -281,12 +400,153 @@ export default function AdminDashboard({
                       <XCircle className="h-4 w-4 mr-1" />
                       Reject
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      onClick={() => handleDeleteFilm(film.id)}
+                      disabled={deletingId === film.id}
+                    >
+                      {deletingId === film.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
           )}
         </TabsContent>
+
+        {/* All Content Tab with delete for published items */}
+        <TabsContent value="all-content">
+          <div className="space-y-6">
+            <div>
+              <h2 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                All Books ({allBooks.length})
+              </h2>
+              {loadingBooks ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+                    <Skeleton key={i} className="h-14 rounded-lg" />
+                  ))}
+                </div>
+              ) : allBooks.length === 0 ? (
+                <p className="text-muted-foreground text-sm py-4">
+                  No books uploaded yet.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {allBooks.map((book, i) => (
+                    <div
+                      key={book.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border bg-card"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <span className="font-medium text-sm">
+                            {book.title}
+                          </span>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-muted-foreground text-xs">
+                              {book.genre}
+                            </span>
+                            <Badge
+                              variant={
+                                book.isPublished ? "default" : "secondary"
+                              }
+                              className="text-xs py-0"
+                            >
+                              {book.isPublished ? "Live" : "Pending"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteBook(book.id)}
+                        disabled={deletingId === book.id}
+                        data-ocid={`admin.all_books.delete.button.${i + 1}`}
+                      >
+                        {deletingId === book.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-1" />
+                        )}
+                        Delete
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h2 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                <Film className="h-5 w-5" />
+                All Films ({allFilms.length})
+              </h2>
+              {loadingFilms ? (
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+                    <Skeleton key={i} className="h-14 rounded-lg" />
+                  ))}
+                </div>
+              ) : allFilms.length === 0 ? (
+                <p className="text-muted-foreground text-sm py-4">
+                  No films uploaded yet.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {allFilms.map((film, i) => (
+                    <div
+                      key={film.id}
+                      className="flex items-center justify-between p-3 rounded-lg border border-border bg-card"
+                    >
+                      <div>
+                        <span className="font-medium text-sm">
+                          {film.title}
+                        </span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-muted-foreground text-xs">
+                            {film.genre}
+                          </span>
+                          <Badge
+                            variant={film.isPublished ? "default" : "secondary"}
+                            className="text-xs py-0"
+                          >
+                            {film.isPublished ? "Live" : "Pending"}
+                          </Badge>
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => handleDeleteFilm(film.id)}
+                        disabled={deletingId === film.id}
+                        data-ocid={`admin.all_films.delete.button.${i + 1}`}
+                      >
+                        {deletingId === film.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Trash2 className="h-4 w-4 mr-1" />
+                        )}
+                        Delete
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
         <TabsContent value="purchases">
           {loadingPurchases ? (
             <div data-ocid="admin.purchases.loading_state">
@@ -341,12 +601,97 @@ export default function AdminDashboard({
             </div>
           )}
         </TabsContent>
+        <TabsContent value="users">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-lg">
+              Saved Profiles ({allUserProfiles.length})
+            </h2>
+          </div>
+          {loadingProfiles ? (
+            <div className="space-y-3" data-ocid="admin.users.loading_state">
+              {Array.from({ length: 4 }).map((_, i) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders
+                <Skeleton key={i} className="h-14 rounded-lg" />
+              ))}
+            </div>
+          ) : allUserProfiles.length === 0 ? (
+            <div
+              className="text-center py-16 text-muted-foreground"
+              data-ocid="admin.users.empty_state"
+            >
+              <Users className="h-12 w-12 mx-auto mb-3 opacity-25" />
+              <p>No profiles saved yet.</p>
+              <p className="text-sm mt-1">
+                Users who save their profile will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border overflow-hidden">
+              <Table data-ocid="admin.users.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Principal ID</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {allUserProfiles.map((user, i) => {
+                    const principalStr = user.principal.toString();
+                    const truncated = `${principalStr.slice(0, 10)}...${principalStr.slice(-6)}`;
+                    return (
+                      <TableRow
+                        key={principalStr}
+                        data-ocid={`admin.users.row.${i + 1}`}
+                      >
+                        <TableCell className="font-medium">
+                          {user.name || (
+                            <span className="text-muted-foreground italic">
+                              Unnamed
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              user.role === "admin" ? "default" : "secondary"
+                            }
+                          >
+                            {user.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {truncated}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-6 w-6"
+                              onClick={() => handleCopyPrincipal(principalStr)}
+                              data-ocid={`admin.users.copy.button.${i + 1}`}
+                              title="Copy Principal ID"
+                            >
+                              <Copy className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </TabsContent>
         <TabsContent value="stripe">
           <div className="max-w-md">
             <h2 className="font-semibold text-lg mb-4">Stripe Configuration</h2>
             <p className="text-muted-foreground text-sm mb-4">
-              Enter your Stripe secret key to enable book purchases. Creators
-              earn 60%, you keep 40%.
+              Enter your Stripe secret key to enable purchases. UPI payments
+              (PhonePe, Google Pay, Paytm) are enabled for India. Creators earn
+              60%, you keep 40%.
             </p>
             <div className="space-y-4">
               <div>
@@ -370,6 +715,41 @@ export default function AdminDashboard({
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : null}
                 Save Configuration
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
+        <TabsContent value="team">
+          <div className="max-w-md">
+            <h2 className="font-semibold text-lg mb-2">Add Admin</h2>
+            <p className="text-muted-foreground text-sm mb-6">
+              Enter a user's Principal ID to grant them admin access. They can
+              find their Principal ID by signing in and checking their profile.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="principal-id">User Principal ID</Label>
+                <Input
+                  id="principal-id"
+                  type="text"
+                  value={principalInput}
+                  onChange={(e) => setPrincipalInput(e.target.value)}
+                  placeholder="aaaaa-bbbbb-ccccc-ddddd-eee"
+                  className="mt-1 font-mono text-sm"
+                  data-ocid="admin.team.input"
+                />
+              </div>
+              <Button
+                onClick={handleMakeAdmin}
+                disabled={isAssigningAdmin}
+                data-ocid="admin.team.submit_button"
+              >
+                {isAssigningAdmin ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <UserPlus className="h-4 w-4 mr-2" />
+                )}
+                {isAssigningAdmin ? "Granting Access..." : "Make Admin"}
               </Button>
             </div>
           </div>

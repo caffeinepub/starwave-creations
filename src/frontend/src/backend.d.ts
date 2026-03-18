@@ -22,6 +22,7 @@ export interface TransformationOutput {
 export interface Book {
     id: string;
     title: string;
+    offlineLocation?: string;
     isPublished: boolean;
     coverImageId: ExternalBlob;
     publishedAt?: bigint;
@@ -92,6 +93,8 @@ export interface StripeConfiguration {
 export interface UserProfile {
     name: string;
     role: string;
+    email?: string;
+    phone?: string;
 }
 export enum UserRole {
     admin = "admin",
@@ -119,9 +122,21 @@ export interface backendInterface {
     }>;
     getAllPurchases(): Promise<Array<PurchaseRecord>>;
     getAllShortFilms(): Promise<Array<ShortFilm>>;
+    getAllUserProfiles(): Promise<Array<{
+        principal: Principal;
+        name: string;
+        role: string;
+    }>>;
     getBook(id: string): Promise<Book | null>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
+    getCreatorProfiles(): Promise<Array<{
+        principal: Principal;
+        name: string;
+        role: string;
+        email?: string;
+        phone?: string;
+    }>>;
     getMyBooks(): Promise<Array<Book>>;
     getMyEarnings(): Promise<bigint>;
     getMyPurchases(): Promise<Array<PurchaseRecord>>;

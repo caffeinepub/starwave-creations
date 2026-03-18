@@ -14,8 +14,10 @@ import OutCall "http-outcalls/outcall";
 import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
 import MixinAuthorization "authorization/MixinAuthorization";
+
 import Migration "migration";
 
+// Apply migration function on upgrades
 (with migration = Migration.run)
 actor {
   include MixinStorage();
@@ -28,6 +30,8 @@ actor {
   public type UserProfile = {
     name : Text;
     role : Text; // "creator" or "customer"
+    phone : ?Text;
+    email : ?Text;
   };
 
   public type Book = {
@@ -40,6 +44,7 @@ actor {
     genre : Text;
     publishedAt : ?Int;
     isPublished : Bool;
+    offlineLocation : ?Text;
   };
 
   public type ShortFilm = {
@@ -73,8 +78,8 @@ actor {
 
   var stripeConfiguration : ?Stripe.StripeConfiguration = null;
 
-  // Required Functions for stripe Integration
-  public query ({ caller }) func isStripeConfigured() : async Bool {
+  // Stripe Integration Functions
+  public shared query ({ caller }) func isStripeConfigured() : async Bool {
     stripeConfiguration != null;
   };
 
@@ -94,7 +99,7 @@ actor {
     };
   };
 
-  public query ({ caller }) func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
+  public shared query ({ caller }) func transform(input : OutCall.TransformationInput) : async OutCall.TransformationOutput {
     OutCall.transform(input);
   };
 
@@ -126,30 +131,60 @@ actor {
   };
 
   // Public query to check if admin has been assigned
-  public query ({ caller }) func hasAdminBeenAssigned() : async Bool {
+  public shared query ({ caller }) func hasAdminBeenAssigned() : async Bool {
     hasAdminBeenAssignedHelper();
   };
 
   // User Profile Management
-  public query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can view profiles");
+  public shared query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Must be signed in to view profile");
     };
     userProfiles.get(caller);
   };
 
-  public query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
+  public shared query ({ caller }) func getUserProfile(user : Principal) : async ?UserProfile {
     if (caller != user and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Can only view your own profile");
     };
     userProfiles.get(user);
   };
 
+  public shared query ({ caller }) func getAllUserProfiles() : async [{ principal : Principal; name : Text; role : Text }] {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can view all profiles");
+    };
+    userProfiles.entries().toArray().map(func((p, profile)) { { principal = p; name = profile.name; role = profile.role } });
+  };
+
+  public shared query ({ caller }) func getCreatorProfiles() : async [{ principal : Principal; name : Text; role : Text; phone : ?Text; email : ?Text }] {
+    let filtered = userProfiles.entries().toArray().filter(
+      func((_, profile)) { profile.role == "creator" }
+    );
+
+    filtered.map(
+      func((principal, profile)) {
+        {
+          principal;
+          name = profile.name;
+          role = profile.role;
+          phone = profile.phone;
+          email = profile.email;
+        };
+      }
+    );
+  };
+
+  // This also grants them the #user role so they can access other features.
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
-    if (not (AccessControl.hasPermission(accessControlState, caller, #user))) {
-      Runtime.trap("Unauthorized: Only users can save profiles");
+    if (caller.isAnonymous()) {
+      Runtime.trap("Unauthorized: Must be signed in to save a profile");
     };
     userProfiles.add(caller, profile);
+    // Grant #user role if not already assigned
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      accessControlState.userRoles.add(caller, #user);
+    };
   };
 
   // Book Management
@@ -196,7 +231,7 @@ actor {
     };
   };
 
-  public query ({ caller }) func getBook(id : Text) : async ?Book {
+  public shared query ({ caller }) func getBook(id : Text) : async ?Book {
     switch (books.get(id)) {
       case (null) { null };
       case (?book) {
@@ -213,7 +248,7 @@ actor {
     };
   };
 
-  public query ({ caller }) func getAllBooks() : async [Book] {
+  public shared query ({ caller }) func getAllBooks() : async [Book] {
     let allBooks = books.values().toArray();
     if (AccessControl.isAdmin(accessControlState, caller)) {
       allBooks;
@@ -222,7 +257,7 @@ actor {
     };
   };
 
-  public query ({ caller }) func getMyBooks() : async [Book] {
+  public shared query ({ caller }) func getMyBooks() : async [Book] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only creators can view their books");
     };
@@ -273,7 +308,7 @@ actor {
     };
   };
 
-  public query ({ caller }) func getShortFilm(id : Text) : async ?ShortFilm {
+  public shared query ({ caller }) func getShortFilm(id : Text) : async ?ShortFilm {
     switch (shortFilms.get(id)) {
       case (null) { null };
       case (?film) {
@@ -290,7 +325,7 @@ actor {
     };
   };
 
-  public query ({ caller }) func getAllShortFilms() : async [ShortFilm] {
+  public shared query ({ caller }) func getAllShortFilms() : async [ShortFilm] {
     let allFilms = shortFilms.values().toArray();
     if (AccessControl.isAdmin(accessControlState, caller)) {
       allFilms;
@@ -299,7 +334,7 @@ actor {
     };
   };
 
-  public query ({ caller }) func getMyShortFilms() : async [ShortFilm] {
+  public shared query ({ caller }) func getMyShortFilms() : async [ShortFilm] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only creators can view their short films");
     };
@@ -314,28 +349,28 @@ actor {
     purchases.add(purchase.id, purchase);
   };
 
-  public query ({ caller }) func getPurchasesByBuyer(buyer : Principal) : async [PurchaseRecord] {
+  public shared query ({ caller }) func getPurchasesByBuyer(buyer : Principal) : async [PurchaseRecord] {
     if (caller != buyer and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: You can only view your own purchases");
     };
     purchases.values().toArray().filter(func(p) { p.buyerPrincipal == buyer });
   };
 
-  public query ({ caller }) func getMyPurchases() : async [PurchaseRecord] {
+  public shared query ({ caller }) func getMyPurchases() : async [PurchaseRecord] {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can view purchases");
     };
     purchases.values().toArray().filter(func(p) { p.buyerPrincipal == caller });
   };
 
-  public query ({ caller }) func getPurchasesByCreator(creator : Principal) : async [PurchaseRecord] {
+  public shared query ({ caller }) func getPurchasesByCreator(creator : Principal) : async [PurchaseRecord] {
     if (caller != creator and not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: You can only view your own creator purchases");
     };
     purchases.values().toArray().filter(func(p) { p.creatorPrincipal == creator });
   };
 
-  public query ({ caller }) func getMyEarnings() : async Nat {
+  public shared query ({ caller }) func getMyEarnings() : async Nat {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only creators can view earnings");
     };
@@ -347,7 +382,7 @@ actor {
     total;
   };
 
-  public query ({ caller }) func getAllPurchases() : async [PurchaseRecord] {
+  public shared query ({ caller }) func getAllPurchases() : async [PurchaseRecord] {
     if (not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Only admins can view all purchases");
     };
@@ -355,11 +390,11 @@ actor {
   };
 
   // Utility Functions
-  public query ({ caller }) func getPublishedBooks() : async [Book] {
+  public shared query ({ caller }) func getPublishedBooks() : async [Book] {
     books.values().toArray().filter(func(b) { b.isPublished });
   };
 
-  public query ({ caller }) func getPublishedShortFilms() : async [ShortFilm] {
+  public shared query ({ caller }) func getPublishedShortFilms() : async [ShortFilm] {
     shortFilms.values().toArray().filter(func(f) { f.isPublished });
   };
 
@@ -436,7 +471,7 @@ actor {
     AccessControl.assignRole(accessControlState, caller, user, role);
   };
 
-  public query ({ caller }) func getAllPublishedContent() : async {
+  public shared query ({ caller }) func getAllPublishedContent() : async {
     books : [Book];
     shortFilms : [ShortFilm];
   } {

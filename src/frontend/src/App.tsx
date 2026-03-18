@@ -13,6 +13,8 @@ import AdminDashboard from "./pages/AdminDashboard";
 import BookDetailPage from "./pages/BookDetailPage";
 import BooksPage from "./pages/BooksPage";
 import CreatorDashboard from "./pages/CreatorDashboard";
+import CreatorProfilePage from "./pages/CreatorProfilePage";
+import CreatorsPage from "./pages/CreatorsPage";
 import FilmDetailPage from "./pages/FilmDetailPage";
 import FilmsPage from "./pages/FilmsPage";
 import HomePage from "./pages/HomePage";
@@ -26,6 +28,8 @@ export type Page =
   | { name: "book"; id: string }
   | { name: "film"; id: string }
   | { name: "creator" }
+  | { name: "creators" }
+  | { name: "creator-profile"; id: string }
   | { name: "admin" }
   | { name: "library" }
   | { name: "profile" };
@@ -42,7 +46,6 @@ export default function App() {
   useEffect(() => {
     if (actor && identity) {
       setRoleLoaded(false);
-      // Call both in parallel
       Promise.all([actor.getCallerUserRole(), actor.hasAdminBeenAssigned()])
         .then(([role, assigned]) => {
           setUserRole(role as UserRole);
@@ -93,10 +96,6 @@ export default function App() {
 
   const navigate = (p: Page) => setPage(p);
 
-  // Show banner when:
-  // - user is signed in
-  // - role check has completed
-  // - admin has NOT been assigned yet (adminAssigned === false) OR user is still a guest
   const showClaimBanner =
     !!identity &&
     roleLoaded &&
@@ -117,6 +116,10 @@ export default function App() {
         return <FilmDetailPage id={page.id} navigate={navigate} />;
       case "creator":
         return <CreatorDashboard navigate={navigate} />;
+      case "creators":
+        return <CreatorsPage navigate={navigate} />;
+      case "creator-profile":
+        return <CreatorProfilePage id={page.id} navigate={navigate} />;
       case "admin":
         return <AdminDashboard navigate={navigate} />;
       case "library":

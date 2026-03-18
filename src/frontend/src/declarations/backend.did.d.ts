@@ -13,6 +13,7 @@ import type { Principal } from '@icp-sdk/core/principal';
 export interface Book {
   'id' : string,
   'title' : string,
+  'offlineLocation' : [] | [string],
   'isPublished' : boolean,
   'coverImageId' : ExternalBlob,
   'publishedAt' : [] | [bigint],
@@ -69,7 +70,12 @@ export interface TransformationOutput {
   'body' : Uint8Array,
   'headers' : Array<http_header>,
 }
-export interface UserProfile { 'name' : string, 'role' : string }
+export interface UserProfile {
+  'name' : string,
+  'role' : string,
+  'email' : [] | [string],
+  'phone' : [] | [string],
+}
 export type UserRole = { 'admin' : null } |
   { 'user' : null } |
   { 'guest' : null };
@@ -133,9 +139,25 @@ export interface _SERVICE {
   >,
   'getAllPurchases' : ActorMethod<[], Array<PurchaseRecord>>,
   'getAllShortFilms' : ActorMethod<[], Array<ShortFilm>>,
+  'getAllUserProfiles' : ActorMethod<
+    [],
+    Array<{ 'principal' : Principal, 'name' : string, 'role' : string }>
+  >,
   'getBook' : ActorMethod<[string], [] | [Book]>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
+  'getCreatorProfiles' : ActorMethod<
+    [],
+    Array<
+      {
+        'principal' : Principal,
+        'name' : string,
+        'role' : string,
+        'email' : [] | [string],
+        'phone' : [] | [string],
+      }
+    >
+  >,
   'getMyBooks' : ActorMethod<[], Array<Book>>,
   'getMyEarnings' : ActorMethod<[], bigint>,
   'getMyPurchases' : ActorMethod<[], Array<PurchaseRecord>>,

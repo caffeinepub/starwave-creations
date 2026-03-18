@@ -50,6 +50,7 @@ function BookForm({
   const [genre, setGenre] = useState("");
   const [price, setPrice] = useState("");
   const [coverFile, setCoverFile] = useState<File | undefined>();
+  const [offlineLocation, setOfflineLocation] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -93,6 +94,19 @@ function BookForm({
         />
       </div>
       <div>
+        <Label>Offline Location (optional)</Label>
+        <Input
+          value={offlineLocation}
+          onChange={(e) => setOfflineLocation(e.target.value)}
+          className="mt-1"
+          placeholder="e.g. My Bookshop, Hyderabad"
+          data-ocid="book_form.offline_location.input"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          Where can readers find this book offline?
+        </p>
+      </div>
+      <div>
         <Label>Cover Image</Label>
         <div className="mt-1 flex items-center gap-3">
           <Button
@@ -123,6 +137,7 @@ function BookForm({
             genre,
             priceCents: BigInt(Math.round(Number.parseFloat(price) * 100)),
             coverFile,
+            offlineLocation: offlineLocation || undefined,
           })
         }
         disabled={!title || !price}
@@ -213,7 +228,7 @@ function FilmFormComponent({
         </div>
       </div>
       <div>
-        <Label>Thumbnail</Label>
+        <Label>Thumbnail Image</Label>
         <div className="mt-1">
           <Button
             type="button"
@@ -241,12 +256,12 @@ function FilmFormComponent({
             title,
             description,
             genre,
-            duration: BigInt(Number.parseInt(duration) || 0),
+            duration: BigInt(duration || "0"),
             videoFile,
             thumbFile,
           })
         }
-        disabled={!title}
+        disabled={!title || !duration}
         data-ocid="film_form.submit.submit_button"
       >
         Save Film
@@ -259,21 +274,19 @@ export default function CreatorDashboard({
   navigate: _navigate,
 }: CreatorDashboardProps) {
   const { actor } = useActor();
-  const { identity, login } = useInternetIdentity();
+  const { identity } = useInternetIdentity();
   const queryClient = useQueryClient();
   const { upload } = useFileUpload();
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
   const [filmDialogOpen, setFilmDialogOpen] = useState(false);
-  const [isSubmittingBook, setIsSubmittingBook] = useState(false);
-  const [isSubmittingFilm, setIsSubmittingFilm] = useState(false);
 
-  const { data: myBooks = [], isLoading: loadingBooks } = useQuery({
+  const { data: myBooks, isLoading: booksLoading } = useQuery({
     queryKey: ["my-books"],
     queryFn: () => actor!.getMyBooks(),
     enabled: !!actor && !!identity,
   });
 
-  const { data: myFilms = [], isLoading: loadingFilms } = useQuery({
+  const { data: myFilms, isLoading: filmsLoading } = useQuery({
     queryKey: ["my-films"],
     queryFn: () => actor!.getMyShortFilms(),
     enabled: !!actor && !!identity,
@@ -285,7 +298,67 @@ export default function CreatorDashboard({
     enabled: !!actor && !!identity,
   });
 
-  const deleteBookMutation = useMutation({
+  const submitBook = useMutation({
+    mutationFn: async (data: Partial<Book> & { coverFile?: File }) => {
+      let coverImageId = ExternalBlob.fromBytes(new Uint8Array());
+      if (data.coverFile) {
+        coverImageId = await upload(data.coverFile);
+      }
+      const principal = identity!.getPrincipal();
+      await actor!.submitBook({
+        id: crypto.randomUUID(),
+        title: data.title ?? "",
+        description: data.description ?? "",
+        genre: data.genre ?? "",
+        priceCents: data.priceCents ?? BigInt(0),
+        coverImageId,
+        author: principal,
+        isPublished: false,
+        offlineLocation: data.offlineLocation,
+      } as Book);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-books"] });
+      toast.success("Book submitted for review!");
+      setBookDialogOpen(false);
+    },
+    onError: () => toast.error("Failed to submit book."),
+  });
+
+  const submitFilm = useMutation({
+    mutationFn: async (
+      data: Partial<ShortFilm> & { videoFile?: File; thumbFile?: File },
+    ) => {
+      let videoId = ExternalBlob.fromBytes(new Uint8Array());
+      let thumbnailId = ExternalBlob.fromBytes(new Uint8Array());
+      if (data.videoFile) {
+        videoId = await upload(data.videoFile);
+      }
+      if (data.thumbFile) {
+        thumbnailId = await upload(data.thumbFile);
+      }
+      const principal = identity!.getPrincipal();
+      await actor!.submitShortFilm({
+        id: crypto.randomUUID(),
+        title: data.title ?? "",
+        description: data.description ?? "",
+        genre: data.genre ?? "",
+        duration: data.duration ?? BigInt(0),
+        videoId,
+        thumbnailId,
+        director: principal,
+        isPublished: false,
+      } as ShortFilm);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["my-films"] });
+      toast.success("Film submitted for review!");
+      setFilmDialogOpen(false);
+    },
+    onError: () => toast.error("Failed to submit film."),
+  });
+
+  const deleteBook = useMutation({
     mutationFn: (id: string) => actor!.deleteBook(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-books"] });
@@ -294,7 +367,7 @@ export default function CreatorDashboard({
     onError: () => toast.error("Failed to delete book."),
   });
 
-  const deleteFilmMutation = useMutation({
+  const deleteFilm = useMutation({
     mutationFn: (id: string) => actor!.deleteShortFilm(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-films"] });
@@ -303,184 +376,109 @@ export default function CreatorDashboard({
     onError: () => toast.error("Failed to delete film."),
   });
 
-  const handleSubmitBook = async (
-    data: Partial<Book> & { coverFile?: File },
-  ) => {
-    if (!actor || !identity) return;
-    setIsSubmittingBook(true);
-    try {
-      let coverBlob = ExternalBlob.fromBytes(new Uint8Array());
-      if (data.coverFile) coverBlob = await upload(data.coverFile);
-      const book: Book = {
-        id: crypto.randomUUID(),
-        title: data.title ?? "",
-        description: data.description ?? "",
-        author: identity.getPrincipal(),
-        genre: data.genre ?? "",
-        priceCents: data.priceCents ?? 0n,
-        coverImageId: coverBlob,
-        isPublished: false,
-        publishedAt: undefined,
-      };
-      await actor.submitBook(book);
-      queryClient.invalidateQueries({ queryKey: ["my-books"] });
-      setBookDialogOpen(false);
-      toast.success("Book submitted for review!");
-    } catch {
-      toast.error("Failed to submit book.");
-    } finally {
-      setIsSubmittingBook(false);
-    }
-  };
-
-  const handleSubmitFilm = async (
-    data: Partial<ShortFilm> & { videoFile?: File; thumbFile?: File },
-  ) => {
-    if (!actor || !identity) return;
-    setIsSubmittingFilm(true);
-    try {
-      let videoBlob = ExternalBlob.fromBytes(new Uint8Array());
-      let thumbBlob = ExternalBlob.fromBytes(new Uint8Array());
-      if (data.videoFile) videoBlob = await upload(data.videoFile);
-      if (data.thumbFile) thumbBlob = await upload(data.thumbFile);
-      const film: ShortFilm = {
-        id: crypto.randomUUID(),
-        title: data.title ?? "",
-        description: data.description ?? "",
-        director: identity.getPrincipal(),
-        genre: data.genre ?? "",
-        duration: data.duration ?? 0n,
-        videoId: videoBlob,
-        thumbnailId: thumbBlob,
-        isPublished: false,
-        publishedAt: undefined,
-      };
-      await actor.submitShortFilm(film);
-      queryClient.invalidateQueries({ queryKey: ["my-films"] });
-      setFilmDialogOpen(false);
-      toast.success("Film submitted for review!");
-    } catch {
-      toast.error("Failed to submit film.");
-    } finally {
-      setIsSubmittingFilm(false);
-    }
-  };
-
   if (!identity) {
     return (
       <div className="container mx-auto px-4 py-20 text-center">
-        <h2 className="font-display text-2xl font-bold mb-2">
-          Sign In to Access Creator Dashboard
-        </h2>
-        <p className="text-muted-foreground mb-6">
-          Manage your books and films here.
+        <p className="text-muted-foreground">
+          Please sign in to access Creator Dashboard.
         </p>
-        <Button onClick={login} data-ocid="creator.login.button">
-          Sign In
-        </Button>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-10">
+    <div className="container mx-auto px-4 py-12 max-w-5xl">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="font-display text-4xl font-bold">Creator Dashboard</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage your content and track earnings.
-          </p>
+          <h1 className="font-display text-3xl font-bold mb-1">
+            Creator Dashboard
+          </h1>
+          <p className="text-muted-foreground">Manage your books and films</p>
         </div>
         {earnings !== undefined && (
-          <div className="text-right">
-            <div className="flex items-center gap-1 text-accent text-2xl font-bold">
-              <DollarSign className="h-5 w-5" />
-              {(Number(earnings) / 100).toFixed(2)}
+          <div className="rounded-lg border border-border bg-card px-4 py-3 text-right">
+            <div className="flex items-center gap-2 text-muted-foreground text-sm">
+              <DollarSign className="h-4 w-4" />
+              Total Earnings
             </div>
-            <p className="text-muted-foreground text-xs">Total Earnings</p>
+            <p className="font-bold text-xl text-primary">
+              ${(Number(earnings) / 100).toFixed(2)}
+            </p>
           </div>
         )}
       </div>
+
       <Tabs defaultValue="books">
-        <TabsList className="mb-6" data-ocid="creator.tabs.tab">
-          <TabsTrigger value="books">
-            <BookOpen className="h-4 w-4 mr-1" />
-            Books
+        <TabsList className="mb-6">
+          <TabsTrigger value="books" data-ocid="creator.books.tab">
+            <BookOpen className="h-4 w-4 mr-2" /> My Books
           </TabsTrigger>
-          <TabsTrigger value="films">
-            <Film className="h-4 w-4 mr-1" />
-            Films
+          <TabsTrigger value="films" data-ocid="creator.films.tab">
+            <Film className="h-4 w-4 mr-2" /> My Films
           </TabsTrigger>
         </TabsList>
+
         <TabsContent value="books">
           <div className="flex justify-end mb-4">
             <Dialog open={bookDialogOpen} onOpenChange={setBookDialogOpen}>
               <DialogTrigger asChild>
                 <Button data-ocid="creator.add_book.open_modal_button">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Book
+                  <Plus className="h-4 w-4 mr-2" /> Add Book
                 </Button>
               </DialogTrigger>
-              <DialogContent data-ocid="creator.book_form.dialog">
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Submit a New Book</DialogTitle>
+                  <DialogTitle>Submit a Book</DialogTitle>
                 </DialogHeader>
-                {isSubmittingBook ? (
-                  <div
-                    className="flex items-center justify-center py-10"
-                    data-ocid="creator.book_form.loading_state"
-                  >
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <span className="ml-2 text-muted-foreground">
-                      Uploading...
-                    </span>
-                  </div>
-                ) : (
-                  <BookForm onSubmit={handleSubmitBook} />
-                )}
+                <BookForm onSubmit={(data) => submitBook.mutate(data)} />
               </DialogContent>
             </Dialog>
           </div>
-          {loadingBooks ? (
-            <div className="space-y-3" data-ocid="creator.books.loading_state">
+
+          {booksLoading ? (
+            <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders
-                <Skeleton key={i} className="h-20 rounded-lg" />
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+                <Skeleton key={i} className="h-20 w-full rounded-lg" />
               ))}
             </div>
-          ) : myBooks.length === 0 ? (
+          ) : !myBooks || myBooks.length === 0 ? (
             <div
-              className="text-center py-16 text-muted-foreground"
+              className="text-center py-12 text-muted-foreground border border-border rounded-lg"
               data-ocid="creator.books.empty_state"
             >
-              No books yet. Submit your first book!
+              No books yet. Add your first book!
             </div>
           ) : (
             <div className="space-y-3">
               {myBooks.map((book, i) => (
                 <div
                   key={book.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-border bg-card"
                   data-ocid={`creator.books.item.${i + 1}`}
+                  className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{book.title}</span>
+                  <BookOpen className="h-8 w-8 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{book.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="secondary" className="text-xs">
+                        {book.genre}
+                      </Badge>
                       <Badge
-                        variant={book.isPublished ? "default" : "secondary"}
+                        variant={book.isPublished ? "default" : "outline"}
+                        className="text-xs"
                       >
-                        {book.isPublished ? "Published" : "Pending Review"}
+                        {book.isPublished ? "Published" : "Pending"}
                       </Badge>
                     </div>
-                    <p className="text-muted-foreground text-sm">
-                      {book.genre} &bull; $
-                      {(Number(book.priceCents) / 100).toFixed(2)}
-                    </p>
                   </div>
+                  <span className="text-primary font-bold">
+                    ${(Number(book.priceCents) / 100).toFixed(2)}
+                  </span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => deleteBookMutation.mutate(book.id)}
+                    onClick={() => deleteBook.mutate(book.id)}
                     data-ocid={`creator.books.delete_button.${i + 1}`}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />
@@ -490,75 +488,70 @@ export default function CreatorDashboard({
             </div>
           )}
         </TabsContent>
+
         <TabsContent value="films">
           <div className="flex justify-end mb-4">
             <Dialog open={filmDialogOpen} onOpenChange={setFilmDialogOpen}>
               <DialogTrigger asChild>
                 <Button data-ocid="creator.add_film.open_modal_button">
-                  <Plus className="h-4 w-4 mr-1" />
-                  Add Film
+                  <Plus className="h-4 w-4 mr-2" /> Add Film
                 </Button>
               </DialogTrigger>
-              <DialogContent data-ocid="creator.film_form.dialog">
+              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Submit a New Short Film</DialogTitle>
+                  <DialogTitle>Submit a Short Film</DialogTitle>
                 </DialogHeader>
-                {isSubmittingFilm ? (
-                  <div
-                    className="flex items-center justify-center py-10"
-                    data-ocid="creator.film_form.loading_state"
-                  >
-                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    <span className="ml-2 text-muted-foreground">
-                      Uploading...
-                    </span>
-                  </div>
-                ) : (
-                  <FilmFormComponent onSubmit={handleSubmitFilm} />
-                )}
+                <FilmFormComponent
+                  onSubmit={(data) => submitFilm.mutate(data)}
+                />
               </DialogContent>
             </Dialog>
           </div>
-          {loadingFilms ? (
-            <div className="space-y-3" data-ocid="creator.films.loading_state">
+
+          {filmsLoading ? (
+            <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders
-                <Skeleton key={i} className="h-20 rounded-lg" />
+                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+                <Skeleton key={i} className="h-20 w-full rounded-lg" />
               ))}
             </div>
-          ) : myFilms.length === 0 ? (
+          ) : !myFilms || myFilms.length === 0 ? (
             <div
-              className="text-center py-16 text-muted-foreground"
+              className="text-center py-12 text-muted-foreground border border-border rounded-lg"
               data-ocid="creator.films.empty_state"
             >
-              No films yet. Submit your first film!
+              No films yet. Add your first short film!
             </div>
           ) : (
             <div className="space-y-3">
               {myFilms.map((film, i) => (
                 <div
                   key={film.id}
-                  className="flex items-center justify-between p-4 rounded-lg border border-border bg-card"
                   data-ocid={`creator.films.item.${i + 1}`}
+                  className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
                 >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{film.title}</span>
+                  <Film className="h-8 w-8 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{film.title}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="secondary" className="text-xs">
+                        {film.genre}
+                      </Badge>
                       <Badge
-                        variant={film.isPublished ? "default" : "secondary"}
+                        variant={film.isPublished ? "default" : "outline"}
+                        className="text-xs"
                       >
-                        {film.isPublished ? "Published" : "Pending Review"}
+                        {film.isPublished ? "Published" : "Pending"}
                       </Badge>
                     </div>
-                    <p className="text-muted-foreground text-sm">
-                      {film.genre} &bull;{" "}
-                      {Math.floor(Number(film.duration) / 60)}m
-                    </p>
                   </div>
+                  <span className="text-muted-foreground text-sm">
+                    {Math.floor(Number(film.duration) / 60)}m
+                  </span>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => deleteFilmMutation.mutate(film.id)}
+                    onClick={() => deleteFilm.mutate(film.id)}
                     data-ocid={`creator.films.delete_button.${i + 1}`}
                   >
                     <Trash2 className="h-4 w-4 text-destructive" />

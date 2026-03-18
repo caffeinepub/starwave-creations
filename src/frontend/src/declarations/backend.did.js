@@ -50,6 +50,7 @@ export const ExternalBlob = IDL.Vec(IDL.Nat8);
 export const Book = IDL.Record({
   'id' : IDL.Text,
   'title' : IDL.Text,
+  'offlineLocation' : IDL.Opt(IDL.Text),
   'isPublished' : IDL.Bool,
   'coverImageId' : ExternalBlob,
   'publishedAt' : IDL.Opt(IDL.Int),
@@ -70,7 +71,12 @@ export const ShortFilm = IDL.Record({
   'genre' : IDL.Text,
   'videoId' : ExternalBlob,
 });
-export const UserProfile = IDL.Record({ 'name' : IDL.Text, 'role' : IDL.Text });
+export const UserProfile = IDL.Record({
+  'name' : IDL.Text,
+  'role' : IDL.Text,
+  'email' : IDL.Opt(IDL.Text),
+  'phone' : IDL.Opt(IDL.Text),
+});
 export const StripeSessionStatus = IDL.Variant({
   'completed' : IDL.Record({
     'userPrincipal' : IDL.Opt(IDL.Text),
@@ -159,9 +165,37 @@ export const idlService = IDL.Service({
     ),
   'getAllPurchases' : IDL.Func([], [IDL.Vec(PurchaseRecord)], ['query']),
   'getAllShortFilms' : IDL.Func([], [IDL.Vec(ShortFilm)], ['query']),
+  'getAllUserProfiles' : IDL.Func(
+      [],
+      [
+        IDL.Vec(
+          IDL.Record({
+            'principal' : IDL.Principal,
+            'name' : IDL.Text,
+            'role' : IDL.Text,
+          })
+        ),
+      ],
+      ['query'],
+    ),
   'getBook' : IDL.Func([IDL.Text], [IDL.Opt(Book)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+  'getCreatorProfiles' : IDL.Func(
+      [],
+      [
+        IDL.Vec(
+          IDL.Record({
+            'principal' : IDL.Principal,
+            'name' : IDL.Text,
+            'role' : IDL.Text,
+            'email' : IDL.Opt(IDL.Text),
+            'phone' : IDL.Opt(IDL.Text),
+          })
+        ),
+      ],
+      ['query'],
+    ),
   'getMyBooks' : IDL.Func([], [IDL.Vec(Book)], ['query']),
   'getMyEarnings' : IDL.Func([], [IDL.Nat], ['query']),
   'getMyPurchases' : IDL.Func([], [IDL.Vec(PurchaseRecord)], ['query']),
@@ -245,6 +279,7 @@ export const idlFactory = ({ IDL }) => {
   const Book = IDL.Record({
     'id' : IDL.Text,
     'title' : IDL.Text,
+    'offlineLocation' : IDL.Opt(IDL.Text),
     'isPublished' : IDL.Bool,
     'coverImageId' : ExternalBlob,
     'publishedAt' : IDL.Opt(IDL.Int),
@@ -265,7 +300,12 @@ export const idlFactory = ({ IDL }) => {
     'genre' : IDL.Text,
     'videoId' : ExternalBlob,
   });
-  const UserProfile = IDL.Record({ 'name' : IDL.Text, 'role' : IDL.Text });
+  const UserProfile = IDL.Record({
+    'name' : IDL.Text,
+    'role' : IDL.Text,
+    'email' : IDL.Opt(IDL.Text),
+    'phone' : IDL.Opt(IDL.Text),
+  });
   const StripeSessionStatus = IDL.Variant({
     'completed' : IDL.Record({
       'userPrincipal' : IDL.Opt(IDL.Text),
@@ -351,9 +391,37 @@ export const idlFactory = ({ IDL }) => {
       ),
     'getAllPurchases' : IDL.Func([], [IDL.Vec(PurchaseRecord)], ['query']),
     'getAllShortFilms' : IDL.Func([], [IDL.Vec(ShortFilm)], ['query']),
+    'getAllUserProfiles' : IDL.Func(
+        [],
+        [
+          IDL.Vec(
+            IDL.Record({
+              'principal' : IDL.Principal,
+              'name' : IDL.Text,
+              'role' : IDL.Text,
+            })
+          ),
+        ],
+        ['query'],
+      ),
     'getBook' : IDL.Func([IDL.Text], [IDL.Opt(Book)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
+    'getCreatorProfiles' : IDL.Func(
+        [],
+        [
+          IDL.Vec(
+            IDL.Record({
+              'principal' : IDL.Principal,
+              'name' : IDL.Text,
+              'role' : IDL.Text,
+              'email' : IDL.Opt(IDL.Text),
+              'phone' : IDL.Opt(IDL.Text),
+            })
+          ),
+        ],
+        ['query'],
+      ),
     'getMyBooks' : IDL.Func([], [IDL.Vec(Book)], ['query']),
     'getMyEarnings' : IDL.Func([], [IDL.Nat], ['query']),
     'getMyPurchases' : IDL.Func([], [IDL.Vec(PurchaseRecord)], ['query']),
