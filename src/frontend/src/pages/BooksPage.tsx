@@ -7,6 +7,7 @@ import { useState } from "react";
 import type { Page } from "../App";
 import type { Book } from "../backend";
 import { useActor } from "../hooks/useActor";
+import { formatINR } from "../lib/bookPricing";
 
 interface BooksPageProps {
   navigate: (p: Page) => void;
@@ -42,7 +43,7 @@ function BookCard({ book, onClick }: { book: Book; onClick: () => void }) {
         <div className="flex items-center justify-between mt-3">
           <Badge variant="secondary">{book.genre}</Badge>
           <span className="text-accent font-bold">
-            ${(Number(book.priceCents) / 100).toFixed(2)}
+            {formatINR(book.priceCents)}
           </span>
         </div>
       </div>
@@ -94,7 +95,11 @@ export default function BooksPage({ navigate }: BooksPageProps) {
             <button
               key={g}
               type="button"
-              className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${genre === g ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:border-primary/50"}`}
+              className={`px-3 py-1.5 rounded-md text-sm border transition-colors ${
+                genre === g
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50"
+              }`}
               onClick={() => setGenre(g)}
               data-ocid="books.genre.tab"
             >

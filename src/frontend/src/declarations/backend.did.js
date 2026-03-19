@@ -148,7 +148,9 @@ export const idlService = IDL.Service({
     ),
   'deleteBook' : IDL.Func([IDL.Text], [], []),
   'deleteShortFilm' : IDL.Func([IDL.Text], [], []),
+  'deleteUserProfile' : IDL.Func([IDL.Principal], [], []),
   'editBook' : IDL.Func([IDL.Text, Book], [], []),
+  'editBookWithPricing' : IDL.Func([IDL.Text, Book, IDL.Opt(IDL.Nat)], [], []),
   'editShortFilm' : IDL.Func([IDL.Text, ShortFilm], [], []),
   'fetchBooks' : IDL.Func([], [IDL.Vec(Book)], ['query']),
   'fetchShortFilms' : IDL.Func([], [IDL.Vec(ShortFilm)], ['query']),
@@ -179,6 +181,7 @@ export const idlService = IDL.Service({
       ['query'],
     ),
   'getBook' : IDL.Func([IDL.Text], [IDL.Opt(Book)], ['query']),
+  'getBookOfflinePrice' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Nat)], ['query']),
   'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
   'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
   'getCreatorProfiles' : IDL.Func(
@@ -191,6 +194,19 @@ export const idlService = IDL.Service({
             'role' : IDL.Text,
             'email' : IDL.Opt(IDL.Text),
             'phone' : IDL.Opt(IDL.Text),
+          })
+        ),
+      ],
+      ['query'],
+    ),
+  'getDeletedProfiles' : IDL.Func(
+      [],
+      [
+        IDL.Vec(
+          IDL.Record({
+            'principal' : IDL.Principal,
+            'name' : IDL.Text,
+            'role' : IDL.Text,
           })
         ),
       ],
@@ -212,6 +228,7 @@ export const idlService = IDL.Service({
       [IDL.Vec(PurchaseRecord)],
       ['query'],
     ),
+  'getRestrictedCreators' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
   'getShortFilm' : IDL.Func([IDL.Text], [IDL.Opt(ShortFilm)], ['query']),
   'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
   'getUserProfile' : IDL.Func(
@@ -223,15 +240,20 @@ export const idlService = IDL.Service({
   'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
   'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
   'rejectContent' : IDL.Func([IDL.Text, IDL.Text], [], []),
+  'restoreUserProfile' : IDL.Func([IDL.Principal], [], []),
+  'restrictCreatorFromPublishing' : IDL.Func([IDL.Principal], [], []),
   'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+  'setBookOfflinePrice' : IDL.Func([IDL.Text, IDL.Opt(IDL.Nat)], [], []),
   'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
   'submitBook' : IDL.Func([Book], [], []),
+  'submitBookWithPricing' : IDL.Func([Book, IDL.Opt(IDL.Nat)], [], []),
   'submitShortFilm' : IDL.Func([ShortFilm], [], []),
   'transform' : IDL.Func(
       [TransformationInput],
       [TransformationOutput],
       ['query'],
     ),
+  'unrestrictCreatorFromPublishing' : IDL.Func([IDL.Principal], [], []),
 });
 
 export const idlInitArgs = [];
@@ -374,7 +396,9 @@ export const idlFactory = ({ IDL }) => {
       ),
     'deleteBook' : IDL.Func([IDL.Text], [], []),
     'deleteShortFilm' : IDL.Func([IDL.Text], [], []),
+    'deleteUserProfile' : IDL.Func([IDL.Principal], [], []),
     'editBook' : IDL.Func([IDL.Text, Book], [], []),
+    'editBookWithPricing' : IDL.Func([IDL.Text, Book, IDL.Opt(IDL.Nat)], [], []),
     'editShortFilm' : IDL.Func([IDL.Text, ShortFilm], [], []),
     'fetchBooks' : IDL.Func([], [IDL.Vec(Book)], ['query']),
     'fetchShortFilms' : IDL.Func([], [IDL.Vec(ShortFilm)], ['query']),
@@ -405,6 +429,7 @@ export const idlFactory = ({ IDL }) => {
         ['query'],
       ),
     'getBook' : IDL.Func([IDL.Text], [IDL.Opt(Book)], ['query']),
+    'getBookOfflinePrice' : IDL.Func([IDL.Text], [IDL.Opt(IDL.Nat)], ['query']),
     'getCallerUserProfile' : IDL.Func([], [IDL.Opt(UserProfile)], ['query']),
     'getCallerUserRole' : IDL.Func([], [UserRole], ['query']),
     'getCreatorProfiles' : IDL.Func(
@@ -417,6 +442,19 @@ export const idlFactory = ({ IDL }) => {
               'role' : IDL.Text,
               'email' : IDL.Opt(IDL.Text),
               'phone' : IDL.Opt(IDL.Text),
+            })
+          ),
+        ],
+        ['query'],
+      ),
+    'getDeletedProfiles' : IDL.Func(
+        [],
+        [
+          IDL.Vec(
+            IDL.Record({
+              'principal' : IDL.Principal,
+              'name' : IDL.Text,
+              'role' : IDL.Text,
             })
           ),
         ],
@@ -438,6 +476,7 @@ export const idlFactory = ({ IDL }) => {
         [IDL.Vec(PurchaseRecord)],
         ['query'],
       ),
+    'getRestrictedCreators' : IDL.Func([], [IDL.Vec(IDL.Principal)], ['query']),
     'getShortFilm' : IDL.Func([IDL.Text], [IDL.Opt(ShortFilm)], ['query']),
     'getStripeSessionStatus' : IDL.Func([IDL.Text], [StripeSessionStatus], []),
     'getUserProfile' : IDL.Func(
@@ -449,15 +488,20 @@ export const idlFactory = ({ IDL }) => {
     'isCallerAdmin' : IDL.Func([], [IDL.Bool], ['query']),
     'isStripeConfigured' : IDL.Func([], [IDL.Bool], ['query']),
     'rejectContent' : IDL.Func([IDL.Text, IDL.Text], [], []),
+    'restoreUserProfile' : IDL.Func([IDL.Principal], [], []),
+    'restrictCreatorFromPublishing' : IDL.Func([IDL.Principal], [], []),
     'saveCallerUserProfile' : IDL.Func([UserProfile], [], []),
+    'setBookOfflinePrice' : IDL.Func([IDL.Text, IDL.Opt(IDL.Nat)], [], []),
     'setStripeConfiguration' : IDL.Func([StripeConfiguration], [], []),
     'submitBook' : IDL.Func([Book], [], []),
+    'submitBookWithPricing' : IDL.Func([Book, IDL.Opt(IDL.Nat)], [], []),
     'submitShortFilm' : IDL.Func([ShortFilm], [], []),
     'transform' : IDL.Func(
         [TransformationInput],
         [TransformationOutput],
         ['query'],
       ),
+    'unrestrictCreatorFromPublishing' : IDL.Func([IDL.Principal], [], []),
   });
 };
 

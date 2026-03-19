@@ -128,7 +128,9 @@ export interface _SERVICE {
   >,
   'deleteBook' : ActorMethod<[string], undefined>,
   'deleteShortFilm' : ActorMethod<[string], undefined>,
+  'deleteUserProfile' : ActorMethod<[Principal], undefined>,
   'editBook' : ActorMethod<[string, Book], undefined>,
+  'editBookWithPricing' : ActorMethod<[string, Book, [] | [bigint]], undefined>,
   'editShortFilm' : ActorMethod<[string, ShortFilm], undefined>,
   'fetchBooks' : ActorMethod<[], Array<Book>>,
   'fetchShortFilms' : ActorMethod<[], Array<ShortFilm>>,
@@ -144,6 +146,7 @@ export interface _SERVICE {
     Array<{ 'principal' : Principal, 'name' : string, 'role' : string }>
   >,
   'getBook' : ActorMethod<[string], [] | [Book]>,
+  'getBookOfflinePrice' : ActorMethod<[string], [] | [bigint]>,
   'getCallerUserProfile' : ActorMethod<[], [] | [UserProfile]>,
   'getCallerUserRole' : ActorMethod<[], UserRole>,
   'getCreatorProfiles' : ActorMethod<
@@ -158,6 +161,10 @@ export interface _SERVICE {
       }
     >
   >,
+  'getDeletedProfiles' : ActorMethod<
+    [],
+    Array<{ 'principal' : Principal, 'name' : string, 'role' : string }>
+  >,
   'getMyBooks' : ActorMethod<[], Array<Book>>,
   'getMyEarnings' : ActorMethod<[], bigint>,
   'getMyPurchases' : ActorMethod<[], Array<PurchaseRecord>>,
@@ -166,6 +173,7 @@ export interface _SERVICE {
   'getPublishedShortFilms' : ActorMethod<[], Array<ShortFilm>>,
   'getPurchasesByBuyer' : ActorMethod<[Principal], Array<PurchaseRecord>>,
   'getPurchasesByCreator' : ActorMethod<[Principal], Array<PurchaseRecord>>,
+  'getRestrictedCreators' : ActorMethod<[], Array<Principal>>,
   'getShortFilm' : ActorMethod<[string], [] | [ShortFilm]>,
   'getStripeSessionStatus' : ActorMethod<[string], StripeSessionStatus>,
   'getUserProfile' : ActorMethod<[Principal], [] | [UserProfile]>,
@@ -173,11 +181,16 @@ export interface _SERVICE {
   'isCallerAdmin' : ActorMethod<[], boolean>,
   'isStripeConfigured' : ActorMethod<[], boolean>,
   'rejectContent' : ActorMethod<[string, string], undefined>,
+  'restoreUserProfile' : ActorMethod<[Principal], undefined>,
+  'restrictCreatorFromPublishing' : ActorMethod<[Principal], undefined>,
   'saveCallerUserProfile' : ActorMethod<[UserProfile], undefined>,
+  'setBookOfflinePrice' : ActorMethod<[string, [] | [bigint]], undefined>,
   'setStripeConfiguration' : ActorMethod<[StripeConfiguration], undefined>,
   'submitBook' : ActorMethod<[Book], undefined>,
+  'submitBookWithPricing' : ActorMethod<[Book, [] | [bigint]], undefined>,
   'submitShortFilm' : ActorMethod<[ShortFilm], undefined>,
   'transform' : ActorMethod<[TransformationInput], TransformationOutput>,
+  'unrestrictCreatorFromPublishing' : ActorMethod<[Principal], undefined>,
 }
 export declare const idlService: IDL.ServiceClass;
 export declare const idlInitArgs: IDL.Type[];

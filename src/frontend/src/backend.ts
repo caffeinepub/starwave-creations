@@ -249,6 +249,12 @@ export interface backendInterface {
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     submitBook(book: Book): Promise<void>;
     submitShortFilm(film: ShortFilm): Promise<void>;
+    deleteUserProfile(user: Principal): Promise<void>;
+    getDeletedProfiles(): Promise<Array<{ principal: Principal; name: string; role: string }>>;
+    getRestrictedCreators(): Promise<Array<Principal>>;
+    restoreUserProfile(user: Principal): Promise<void>;
+    restrictCreatorFromPublishing(user: Principal): Promise<void>;
+    unrestrictCreatorFromPublishing(user: Principal): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
 }
 import type { Book as _Book, ExternalBlob as _ExternalBlob, ShortFilm as _ShortFilm, StripeSessionStatus as _StripeSessionStatus, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
@@ -952,6 +958,36 @@ export class Backend implements backendInterface {
             const result = await this.actor.transform(arg0);
             return result;
         }
+    }
+    async deleteUserProfile(arg0: Principal): Promise<void> {
+        if (this.processError) {
+            try { await (this.actor as any).deleteUserProfile(arg0); } catch(e) { this.processError(e); throw new Error("unreachable"); }
+        } else { await (this.actor as any).deleteUserProfile(arg0); }
+    }
+    async getDeletedProfiles(): Promise<Array<{ principal: Principal; name: string; role: string }>> {
+        if (this.processError) {
+            try { return await (this.actor as any).getDeletedProfiles(); } catch(e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).getDeletedProfiles(); }
+    }
+    async getRestrictedCreators(): Promise<Array<Principal>> {
+        if (this.processError) {
+            try { return await (this.actor as any).getRestrictedCreators(); } catch(e) { this.processError(e); throw new Error("unreachable"); }
+        } else { return await (this.actor as any).getRestrictedCreators(); }
+    }
+    async restoreUserProfile(arg0: Principal): Promise<void> {
+        if (this.processError) {
+            try { await (this.actor as any).restoreUserProfile(arg0); } catch(e) { this.processError(e); throw new Error("unreachable"); }
+        } else { await (this.actor as any).restoreUserProfile(arg0); }
+    }
+    async restrictCreatorFromPublishing(arg0: Principal): Promise<void> {
+        if (this.processError) {
+            try { await (this.actor as any).restrictCreatorFromPublishing(arg0); } catch(e) { this.processError(e); throw new Error("unreachable"); }
+        } else { await (this.actor as any).restrictCreatorFromPublishing(arg0); }
+    }
+    async unrestrictCreatorFromPublishing(arg0: Principal): Promise<void> {
+        if (this.processError) {
+            try { await (this.actor as any).unrestrictCreatorFromPublishing(arg0); } catch(e) { this.processError(e); throw new Error("unreachable"); }
+        } else { await (this.actor as any).unrestrictCreatorFromPublishing(arg0); }
     }
 }
 async function from_candid_Book_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Book): Promise<Book> {

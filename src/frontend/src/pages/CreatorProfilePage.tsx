@@ -14,6 +14,7 @@ import {
 import type { Page } from "../App";
 import type { Book, ShortFilm } from "../backend";
 import { useActor } from "../hooks/useActor";
+import { formatINR } from "../lib/bookPricing";
 
 interface CreatorProfilePageProps {
   id: string;
@@ -166,8 +167,8 @@ export default function CreatorProfilePage({
                     <Badge variant="secondary" className="text-xs">
                       {book.genre}
                     </Badge>
-                    <span className="text-primary font-bold text-sm">
-                      ${(Number(book.priceCents) / 100).toFixed(2)}
+                    <span className="text-primary font-bold text-xs">
+                      {formatINR(book.priceCents)}
                     </span>
                   </div>
                   {book.offlineLocation && (

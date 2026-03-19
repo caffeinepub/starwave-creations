@@ -15,10 +15,6 @@ import Storage "blob-storage/Storage";
 import MixinStorage "blob-storage/Mixin";
 import MixinAuthorization "authorization/MixinAuthorization";
 
-import Migration "migration";
-
-// Apply migration function on upgrades
-(with migration = Migration.run)
 actor {
   include MixinStorage();
 
@@ -26,10 +22,12 @@ actor {
   include MixinAuthorization(accessControlState);
 
   let userProfiles = Map.empty<Principal, UserProfile>();
+  let deletedProfiles = Map.empty<Principal, UserProfile>();
+  let restrictedCreators = Map.empty<Principal, Bool>();
 
   public type UserProfile = {
     name : Text;
-    role : Text; // "creator" or "customer"
+    role : Text;
     phone : ?Text;
     email : ?Text;
   };
@@ -72,13 +70,13 @@ actor {
     purchasedAt : Int;
   };
 
+  let bookOfflinePrices = Map.empty<Text, Nat>();
   let books = Map.empty<Text, Book>();
   let shortFilms = Map.empty<Text, ShortFilm>();
   let purchases = Map.empty<Text, PurchaseRecord>();
 
   var stripeConfiguration : ?Stripe.StripeConfiguration = null;
 
-  // Stripe Integration Functions
   public shared query ({ caller }) func isStripeConfigured() : async Bool {
     stripeConfiguration != null;
   };
@@ -92,9 +90,7 @@ actor {
 
   func getStripeConfiguration() : Stripe.StripeConfiguration {
     switch (stripeConfiguration) {
-      case (null) {
-        Runtime.trap("stripe needs to be first configured");
-      };
+      case (null) { Runtime.trap("stripe needs to be first configured") };
       case (?value) { value };
     };
   };
@@ -111,7 +107,6 @@ actor {
     await Stripe.createCheckoutSession(getStripeConfiguration(), caller, items, successUrl, cancelUrl, transform);
   };
 
-  // Claim first admin - only works when no admin has been assigned yet or in case of a redeployment
   public shared ({ caller }) func claimFirstAdmin() : async Bool {
     if (caller.isAnonymous()) { return false };
     if (hasAdminBeenAssignedHelper()) { return false };
@@ -120,22 +115,17 @@ actor {
     true;
   };
 
-  // Check if admin has been assigned or for admin role in any user (PRIVATE helper)
   func hasAdminBeenAssignedHelper() : Bool {
     for ((_, role) in accessControlState.userRoles.entries()) {
-      if (role == #admin) {
-        return true;
-      };
+      if (role == #admin) { return true };
     };
     false;
   };
 
-  // Public query to check if admin has been assigned
   public shared query ({ caller }) func hasAdminBeenAssigned() : async Bool {
     hasAdminBeenAssignedHelper();
   };
 
-  // User Profile Management
   public shared query ({ caller }) func getCallerUserProfile() : async ?UserProfile {
     if (caller.isAnonymous()) {
       Runtime.trap("Unauthorized: Must be signed in to view profile");
@@ -161,30 +151,81 @@ actor {
     let filtered = userProfiles.entries().toArray().filter(
       func((_, profile)) { profile.role == "creator" }
     );
-
     filtered.map(
       func((principal, profile)) {
-        {
-          principal;
-          name = profile.name;
-          role = profile.role;
-          phone = profile.phone;
-          email = profile.email;
-        };
+        { principal; name = profile.name; role = profile.role; phone = profile.phone; email = profile.email };
       }
     );
   };
 
-  // This also grants them the #user role so they can access other features.
   public shared ({ caller }) func saveCallerUserProfile(profile : UserProfile) : async () {
     if (caller.isAnonymous()) {
       Runtime.trap("Unauthorized: Must be signed in to save a profile");
     };
     userProfiles.add(caller, profile);
-    // Grant #user role if not already assigned
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       accessControlState.userRoles.add(caller, #user);
     };
+  };
+
+  // Admin: delete a user profile (moves to deleted store for potential restoration)
+  public shared ({ caller }) func deleteUserProfile(user : Principal) : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can delete profiles");
+    };
+    switch (userProfiles.get(user)) {
+      case (null) { Runtime.trap("Profile not found") };
+      case (?profile) {
+        deletedProfiles.add(user, profile);
+        userProfiles.remove(user);
+      };
+    };
+  };
+
+  // Admin: restore a deleted profile
+  public shared ({ caller }) func restoreUserProfile(user : Principal) : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can restore profiles");
+    };
+    switch (deletedProfiles.get(user)) {
+      case (null) { Runtime.trap("Deleted profile not found") };
+      case (?profile) {
+        userProfiles.add(user, profile);
+        deletedProfiles.remove(user);
+      };
+    };
+  };
+
+  // Admin: get all deleted profiles
+  public shared query ({ caller }) func getDeletedProfiles() : async [{ principal : Principal; name : Text; role : Text }] {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can view deleted profiles");
+    };
+    deletedProfiles.entries().toArray().map(func((p, profile)) { { principal = p; name = profile.name; role = profile.role } });
+  };
+
+  // Admin: restrict a creator from publishing
+  public shared ({ caller }) func restrictCreatorFromPublishing(user : Principal) : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can restrict creators");
+    };
+    restrictedCreators.add(user, true);
+  };
+
+  // Admin: lift restriction from a creator
+  public shared ({ caller }) func unrestrictCreatorFromPublishing(user : Principal) : async () {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can unrestrict creators");
+    };
+    restrictedCreators.remove(user);
+  };
+
+  // Admin: get all restricted creators
+  public shared query ({ caller }) func getRestrictedCreators() : async [Principal] {
+    if (not AccessControl.isAdmin(accessControlState, caller)) {
+      Runtime.trap("Unauthorized: Only admins can view restricted creators");
+    };
+    restrictedCreators.keys().toArray();
   };
 
   // Book Management
@@ -192,10 +233,52 @@ actor {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only creators can submit books");
     };
+    if (restrictedCreators.get(caller) == ?true) {
+      Runtime.trap("Your account has been restricted from publishing by an admin");
+    };
     if (book.author != caller) {
       Runtime.trap("Unauthorized: You can only submit books as yourself");
     };
     books.add(book.id, book);
+  };
+
+  public shared ({ caller }) func submitBookWithPricing(book : Book, offlinePriceCents : ?Nat) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only creators can submit books");
+    };
+    if (restrictedCreators.get(caller) == ?true) {
+      Runtime.trap("Your account has been restricted from publishing by an admin");
+    };
+    if (book.author != caller) {
+      Runtime.trap("Unauthorized: You can only submit books as yourself");
+    };
+    books.add(book.id, book);
+    switch (offlinePriceCents) {
+      case (null) { bookOfflinePrices.remove(book.id) };
+      case (?price) { bookOfflinePrices.add(book.id, price) };
+    };
+  };
+
+  public shared ({ caller }) func setBookOfflinePrice(bookId : Text, offlinePriceCents : ?Nat) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized");
+    };
+    switch (books.get(bookId)) {
+      case (null) { Runtime.trap("Book not found") };
+      case (?book) {
+        if (book.author != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+          Runtime.trap("Unauthorized: You can only edit your own books");
+        };
+        switch (offlinePriceCents) {
+          case (null) { bookOfflinePrices.remove(bookId) };
+          case (?price) { bookOfflinePrices.add(bookId, price) };
+        };
+      };
+    };
+  };
+
+  public shared query ({ caller }) func getBookOfflinePrice(bookId : Text) : async ?Nat {
+    bookOfflinePrices.get(bookId);
   };
 
   public shared ({ caller }) func editBook(id : Text, book : Book) : async () {
@@ -216,6 +299,28 @@ actor {
     };
   };
 
+  public shared ({ caller }) func editBookWithPricing(id : Text, book : Book, offlinePriceCents : ?Nat) : async () {
+    if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
+      Runtime.trap("Unauthorized: Only creators can edit books");
+    };
+    switch (books.get(id)) {
+      case (null) { Runtime.trap("Book not found") };
+      case (?existingBook) {
+        if (existingBook.author != caller and not AccessControl.isAdmin(accessControlState, caller)) {
+          Runtime.trap("Unauthorized: You can only edit your own books");
+        };
+        if (book.author != existingBook.author) {
+          Runtime.trap("Cannot change book author");
+        };
+        books.add(id, book);
+        switch (offlinePriceCents) {
+          case (null) { bookOfflinePrices.remove(id) };
+          case (?price) { bookOfflinePrices.add(id, price) };
+        };
+      };
+    };
+  };
+
   public shared ({ caller }) func deleteBook(id : Text) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can delete books");
@@ -227,6 +332,7 @@ actor {
           Runtime.trap("Unauthorized: You can only delete your own books");
         };
         books.remove(id);
+        bookOfflinePrices.remove(id);
       };
     };
   };
@@ -235,14 +341,8 @@ actor {
     switch (books.get(id)) {
       case (null) { null };
       case (?book) {
-        if (book.isPublished) {
-          ?book;
-        } else {
-          if (book.author == caller or AccessControl.isAdmin(accessControlState, caller)) {
-            ?book;
-          } else {
-            null;
-          };
+        if (book.isPublished) { ?book } else {
+          if (book.author == caller or AccessControl.isAdmin(accessControlState, caller)) { ?book } else { null };
         };
       };
     };
@@ -250,11 +350,8 @@ actor {
 
   public shared query ({ caller }) func getAllBooks() : async [Book] {
     let allBooks = books.values().toArray();
-    if (AccessControl.isAdmin(accessControlState, caller)) {
-      allBooks;
-    } else {
-      allBooks.filter(func(b) { b.isPublished });
-    };
+    if (AccessControl.isAdmin(accessControlState, caller)) { allBooks }
+    else { allBooks.filter(func(b) { b.isPublished }) };
   };
 
   public shared query ({ caller }) func getMyBooks() : async [Book] {
@@ -268,6 +365,9 @@ actor {
   public shared ({ caller }) func submitShortFilm(film : ShortFilm) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only creators can submit short films");
+    };
+    if (restrictedCreators.get(caller) == ?true) {
+      Runtime.trap("Your account has been restricted from publishing by an admin");
     };
     if (film.director != caller) {
       Runtime.trap("Unauthorized: You can only submit short films as yourself");
@@ -312,14 +412,8 @@ actor {
     switch (shortFilms.get(id)) {
       case (null) { null };
       case (?film) {
-        if (film.isPublished) {
-          ?film;
-        } else {
-          if (film.director == caller or AccessControl.isAdmin(accessControlState, caller)) {
-            ?film;
-          } else {
-            null;
-          };
+        if (film.isPublished) { ?film } else {
+          if (film.director == caller or AccessControl.isAdmin(accessControlState, caller)) { ?film } else { null };
         };
       };
     };
@@ -327,11 +421,8 @@ actor {
 
   public shared query ({ caller }) func getAllShortFilms() : async [ShortFilm] {
     let allFilms = shortFilms.values().toArray();
-    if (AccessControl.isAdmin(accessControlState, caller)) {
-      allFilms;
-    } else {
-      allFilms.filter(func(f) { f.isPublished });
-    };
+    if (AccessControl.isAdmin(accessControlState, caller)) { allFilms }
+    else { allFilms.filter(func(f) { f.isPublished }) };
   };
 
   public shared query ({ caller }) func getMyShortFilms() : async [ShortFilm] {
@@ -341,7 +432,6 @@ actor {
     shortFilms.values().toArray().filter(func(f) { f.director == caller });
   };
 
-  // Purchase Records Management
   public shared ({ caller }) func addPurchase(purchase : PurchaseRecord) : async () {
     if (not AccessControl.hasPermission(accessControlState, caller, #user)) {
       Runtime.trap("Unauthorized: Only users can add purchases");
@@ -376,9 +466,7 @@ actor {
     };
     let myPurchases = purchases.values().toArray().filter(func(p) { p.creatorPrincipal == caller });
     var total : Nat = 0;
-    for (purchase in myPurchases.vals()) {
-      total += purchase.creatorShareCents;
-    };
+    for (purchase in myPurchases.vals()) { total += purchase.creatorShareCents };
     total;
   };
 
@@ -389,7 +477,6 @@ actor {
     purchases.values().toArray();
   };
 
-  // Utility Functions
   public shared query ({ caller }) func getPublishedBooks() : async [Book] {
     books.values().toArray().filter(func(b) { b.isPublished });
   };
@@ -406,23 +493,13 @@ actor {
       case ("book") {
         switch (books.get(id)) {
           case (null) { Runtime.trap("Book not found") };
-          case (?book) {
-            books.add(id, {
-              book with isPublished = true;
-              publishedAt = ?Time.now();
-            });
-          };
+          case (?book) { books.add(id, { book with isPublished = true; publishedAt = ?Time.now() }) };
         };
       };
       case ("shortFilm") {
         switch (shortFilms.get(id)) {
           case (null) { Runtime.trap("Short film not found") };
-          case (?film) {
-            shortFilms.add(id, {
-              film with isPublished = true;
-              publishedAt = ?Time.now();
-            });
-          };
+          case (?film) { shortFilms.add(id, { film with isPublished = true; publishedAt = ?Time.now() }) };
         };
       };
       case (_) { Runtime.trap("Invalid content type") };
@@ -437,23 +514,13 @@ actor {
       case ("book") {
         switch (books.get(id)) {
           case (null) { Runtime.trap("Book not found") };
-          case (?book) {
-            books.add(id, {
-              book with isPublished = false;
-              publishedAt = null;
-            });
-          };
+          case (?book) { books.add(id, { book with isPublished = false; publishedAt = null }) };
         };
       };
       case ("shortFilm") {
         switch (shortFilms.get(id)) {
           case (null) { Runtime.trap("Short film not found") };
-          case (?film) {
-            shortFilms.add(id, {
-              film with isPublished = false;
-              publishedAt = null;
-            });
-          };
+          case (?film) { shortFilms.add(id, { film with isPublished = false; publishedAt = null }) };
         };
       };
       case (_) { Runtime.trap("Invalid content type") };
@@ -481,7 +548,6 @@ actor {
     };
   };
 
-  // Fetchers for component-passthrough - ADMIN ONLY to prevent unauthorized access
   public shared query ({ caller }) func fetchBooks() : async [Book] {
     if (not AccessControl.isAdmin(accessControlState, caller)) {
       Runtime.trap("Unauthorized: Only admins can fetch all books");

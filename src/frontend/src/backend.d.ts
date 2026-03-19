@@ -156,5 +156,11 @@ export interface backendInterface {
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     submitBook(book: Book): Promise<void>;
     submitShortFilm(film: ShortFilm): Promise<void>;
+    deleteUserProfile(user: Principal): Promise<void>;
+    getDeletedProfiles(): Promise<Array<{ principal: Principal; name: string; role: string }>>;
+    getRestrictedCreators(): Promise<Array<Principal>>;
+    restoreUserProfile(user: Principal): Promise<void>;
+    restrictCreatorFromPublishing(user: Principal): Promise<void>;
+    unrestrictCreatorFromPublishing(user: Principal): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
 }

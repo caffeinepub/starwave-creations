@@ -15,12 +15,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Principal } from "@dfinity/principal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Ban,
   BookOpen,
   CheckCircle,
   Copy,
   DollarSign,
   Film,
   Loader2,
+  RotateCcw,
   Settings,
   Shield,
   Trash2,
@@ -41,6 +43,12 @@ interface AdminDashboardProps {
 }
 
 interface UserProfileEntry {
+  principal: Principal;
+  name: string;
+  role: string;
+}
+
+interface DeletedProfileEntry {
   principal: Principal;
   name: string;
   role: string;
@@ -87,16 +95,39 @@ export default function AdminDashboard({
   >({
     queryKey: ["all-user-profiles"],
     queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (actor as any).getAllUserProfiles();
-      return result ?? [];
+      const result = await actor!.getAllUserProfiles();
+      return (result ?? []) as UserProfileEntry[];
     },
     enabled: !!actor && !!identity && !!isAdmin,
   });
 
+  const { data: deletedProfiles = [], isLoading: loadingDeleted } = useQuery<
+    DeletedProfileEntry[]
+  >({
+    queryKey: ["deleted-profiles"],
+    queryFn: async () => {
+      const result = await actor!.getDeletedProfiles();
+      return (result ?? []) as DeletedProfileEntry[];
+    },
+    enabled: !!actor && !!identity && !!isAdmin,
+  });
+
+  const { data: restrictedCreators = [] } = useQuery<Principal[]>({
+    queryKey: ["restricted-creators"],
+    queryFn: async () => {
+      const result = await actor!.getRestrictedCreators();
+      return (result ?? []) as Principal[];
+    },
+    enabled: !!actor && !!identity && !!isAdmin,
+  });
+
+  const restrictedSet = new Set(
+    restrictedCreators.map((p: Principal) => p.toString()),
+  );
+
   const approveMutation = useMutation({
     mutationFn: ({ id, type }: { id: string; type: string }) =>
-      actor!.approveContent(id, type),
+      actor!.approveContent(id, type === "film" ? "shortFilm" : type),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all-books"] });
       queryClient.invalidateQueries({ queryKey: ["all-films"] });
@@ -107,13 +138,59 @@ export default function AdminDashboard({
 
   const rejectMutation = useMutation({
     mutationFn: ({ id, type }: { id: string; type: string }) =>
-      actor!.rejectContent(id, type),
+      actor!.rejectContent(id, type === "film" ? "shortFilm" : type),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all-books"] });
       queryClient.invalidateQueries({ queryKey: ["all-films"] });
       toast.success("Content rejected.");
     },
     onError: () => toast.error("Failed to reject."),
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (principal: Principal) => {
+      await actor!.deleteUserProfile(principal);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-user-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["deleted-profiles"] });
+      toast.success("Account deleted successfully.");
+    },
+    onError: () => toast.error("Failed to delete account."),
+  });
+
+  const restoreUserMutation = useMutation({
+    mutationFn: async (principal: Principal) => {
+      await actor!.restoreUserProfile(principal);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-user-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["deleted-profiles"] });
+      toast.success("Account restored successfully.");
+    },
+    onError: () => toast.error("Failed to restore account."),
+  });
+
+  const restrictMutation = useMutation({
+    mutationFn: async (principal: Principal) => {
+      await actor!.restrictCreatorFromPublishing(principal);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["restricted-creators"] });
+      toast.success("Creator restricted from publishing.");
+    },
+    onError: () => toast.error("Failed to restrict creator."),
+  });
+
+  const unrestrictMutation = useMutation({
+    mutationFn: async (principal: Principal) => {
+      await actor!.unrestrictCreatorFromPublishing(principal);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["restricted-creators"] });
+      toast.success("Creator publishing restriction removed.");
+    },
+    onError: () => toast.error("Failed to unrestrict creator."),
   });
 
   const handleDeleteBook = async (id: string) => {
@@ -198,6 +275,32 @@ export default function AdminDashboard({
   const handleCopyPrincipal = (principalStr: string) => {
     navigator.clipboard.writeText(principalStr);
     toast.success("Principal ID copied!");
+  };
+
+  const handleDeleteUser = (user: UserProfileEntry) => {
+    if (
+      !window.confirm(
+        `Permanently delete account for "${user.name || "Unnamed"}"? This action cannot be undone.`,
+      )
+    )
+      return;
+    deleteUserMutation.mutate(user.principal);
+  };
+
+  const handleToggleRestrict = (user: UserProfileEntry) => {
+    const principalStr = user.principal.toString();
+    const isRestricted = restrictedSet.has(principalStr);
+    if (isRestricted) {
+      unrestrictMutation.mutate(user.principal);
+    } else {
+      if (
+        !window.confirm(
+          `Restrict "${user.name || "Unnamed"}" from publishing new content?`,
+        )
+      )
+        return;
+      restrictMutation.mutate(user.principal);
+    }
   };
 
   const totalRevenue = allPurchases.reduce(
@@ -601,90 +704,300 @@ export default function AdminDashboard({
             </div>
           )}
         </TabsContent>
+
+        {/* Users Tab */}
         <TabsContent value="users">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-lg">
-              Saved Profiles ({allUserProfiles.length})
-            </h2>
-          </div>
-          {loadingProfiles ? (
-            <div className="space-y-3" data-ocid="admin.users.loading_state">
-              {Array.from({ length: 4 }).map((_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders
-                <Skeleton key={i} className="h-14 rounded-lg" />
-              ))}
+          {/* Active Users Section */}
+          <div className="mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-lg">
+                Active Accounts ({allUserProfiles.length})
+              </h2>
             </div>
-          ) : allUserProfiles.length === 0 ? (
-            <div
-              className="text-center py-16 text-muted-foreground"
-              data-ocid="admin.users.empty_state"
-            >
-              <Users className="h-12 w-12 mx-auto mb-3 opacity-25" />
-              <p>No profiles saved yet.</p>
-              <p className="text-sm mt-1">
-                Users who save their profile will appear here.
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-border overflow-hidden">
-              <Table data-ocid="admin.users.table">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead>Principal ID</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {allUserProfiles.map((user, i) => {
-                    const principalStr = user.principal.toString();
-                    const truncated = `${principalStr.slice(0, 10)}...${principalStr.slice(-6)}`;
-                    return (
-                      <TableRow
-                        key={principalStr}
-                        data-ocid={`admin.users.row.${i + 1}`}
-                      >
-                        <TableCell className="font-medium">
-                          {user.name || (
-                            <span className="text-muted-foreground italic">
-                              Unnamed
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              user.role === "admin" ? "default" : "secondary"
-                            }
-                          >
-                            {user.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {truncated}
-                            </span>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-6 w-6"
-                              onClick={() => handleCopyPrincipal(principalStr)}
-                              data-ocid={`admin.users.copy.button.${i + 1}`}
-                              title="Copy Principal ID"
+            {loadingProfiles ? (
+              <div className="space-y-3" data-ocid="admin.users.loading_state">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: skeleton placeholders
+                  <Skeleton key={i} className="h-14 rounded-lg" />
+                ))}
+              </div>
+            ) : allUserProfiles.length === 0 ? (
+              <div
+                className="text-center py-12 text-muted-foreground"
+                data-ocid="admin.users.empty_state"
+              >
+                <Users className="h-12 w-12 mx-auto mb-3 opacity-25" />
+                <p>No profiles saved yet.</p>
+                <p className="text-sm mt-1">
+                  Users who save their profile will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <Table data-ocid="admin.users.table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Principal ID</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {allUserProfiles.map((user, i) => {
+                      const principalStr = user.principal.toString();
+                      const truncated = `${principalStr.slice(0, 10)}...${principalStr.slice(-6)}`;
+                      const isCreator =
+                        user.role === "creator" ||
+                        user.role === "writer" ||
+                        user.role === "director";
+                      const isRestricted = restrictedSet.has(principalStr);
+                      const isDeletingUser =
+                        deleteUserMutation.isPending &&
+                        deleteUserMutation.variables?.toString() ===
+                          principalStr;
+                      const isRestrictingUser =
+                        (restrictMutation.isPending ||
+                          unrestrictMutation.isPending) &&
+                        (restrictMutation.variables?.toString() ===
+                          principalStr ||
+                          unrestrictMutation.variables?.toString() ===
+                            principalStr);
+                      return (
+                        <TableRow
+                          key={principalStr}
+                          data-ocid={`admin.users.row.${i + 1}`}
+                        >
+                          <TableCell className="font-medium">
+                            {user.name || (
+                              <span className="text-muted-foreground italic">
+                                Unnamed
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                user.role === "admin" ? "default" : "secondary"
+                              }
                             >
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+                              {user.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {truncated}
+                              </span>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() =>
+                                  handleCopyPrincipal(principalStr)
+                                }
+                                data-ocid={`admin.users.copy.button.${i + 1}`}
+                                title="Copy Principal ID"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {isCreator && isRestricted ? (
+                              <Badge variant="destructive" className="text-xs">
+                                Restricted
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="text-xs text-green-400 border-green-400/40"
+                              >
+                                Active
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {isCreator && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className={
+                                    isRestricted
+                                      ? "border-green-500/40 text-green-400 hover:bg-green-500/10 hover:text-green-300 text-xs px-2"
+                                      : "border-yellow-500/40 text-yellow-400 hover:bg-yellow-500/10 hover:text-yellow-300 text-xs px-2"
+                                  }
+                                  onClick={() => handleToggleRestrict(user)}
+                                  disabled={isRestrictingUser}
+                                  data-ocid={
+                                    isRestricted
+                                      ? `admin.users.unrestrict.button.${i + 1}`
+                                      : `admin.users.restrict.button.${i + 1}`
+                                  }
+                                  title={
+                                    isRestricted
+                                      ? "Allow publishing"
+                                      : "Restrict from publishing"
+                                  }
+                                >
+                                  {isRestrictingUser ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : isRestricted ? (
+                                    <>
+                                      <CheckCircle className="h-3 w-3 mr-1" />
+                                      Unrestrict
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Ban className="h-3 w-3 mr-1" />
+                                      Restrict
+                                    </>
+                                  )}
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-destructive/40 text-destructive hover:bg-destructive/10 text-xs px-2"
+                                onClick={() => handleDeleteUser(user)}
+                                disabled={isDeletingUser}
+                                data-ocid={`admin.users.delete_button.${i + 1}`}
+                                title="Delete account"
+                              >
+                                {isDeletingUser ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <>
+                                    <Trash2 className="h-3 w-3 mr-1" />
+                                    Delete
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+
+          {/* Deleted Accounts Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Trash2 className="h-5 w-5 text-destructive/70" />
+              <h2 className="font-semibold text-lg">
+                Deleted Accounts ({deletedProfiles.length})
+              </h2>
             </div>
-          )}
+            {loadingDeleted ? (
+              <div
+                className="space-y-3"
+                data-ocid="admin.deleted_users.loading_state"
+              >
+                {Array.from({ length: 2 }).map((_, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+                  <Skeleton key={i} className="h-14 rounded-lg" />
+                ))}
+              </div>
+            ) : deletedProfiles.length === 0 ? (
+              <div
+                className="text-center py-10 text-muted-foreground border border-dashed border-border rounded-lg"
+                data-ocid="admin.deleted_users.empty_state"
+              >
+                <p className="text-sm">No deleted accounts.</p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border overflow-hidden">
+                <Table data-ocid="admin.deleted_users.table">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Principal ID</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {deletedProfiles.map((user, i) => {
+                      const principalStr = user.principal.toString();
+                      const truncated = `${principalStr.slice(0, 10)}...${principalStr.slice(-6)}`;
+                      const isRestoringUser =
+                        restoreUserMutation.isPending &&
+                        restoreUserMutation.variables?.toString() ===
+                          principalStr;
+                      return (
+                        <TableRow
+                          key={principalStr}
+                          className="opacity-70"
+                          data-ocid={`admin.deleted_users.row.${i + 1}`}
+                        >
+                          <TableCell className="font-medium">
+                            {user.name || (
+                              <span className="text-muted-foreground italic">
+                                Unnamed
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs">
+                              {user.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {truncated}
+                              </span>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-6 w-6"
+                                onClick={() =>
+                                  handleCopyPrincipal(principalStr)
+                                }
+                                title="Copy Principal ID"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-green-500/40 text-green-400 hover:bg-green-500/10 hover:text-green-300 text-xs px-2"
+                              onClick={() =>
+                                restoreUserMutation.mutate(user.principal)
+                              }
+                              disabled={isRestoringUser}
+                              data-ocid={`admin.deleted_users.restore.button.${i + 1}`}
+                              title="Restore account"
+                            >
+                              {isRestoringUser ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <RotateCcw className="h-3 w-3 mr-1" />
+                                  Restore
+                                </>
+                              )}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
         </TabsContent>
+
         <TabsContent value="stripe">
           <div className="max-w-md">
             <h2 className="font-semibold text-lg mb-4">Stripe Configuration</h2>

@@ -28,6 +28,7 @@ import type { Page } from "../App";
 import { type Book, ExternalBlob, type ShortFilm } from "../backend";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { formatINR, splitNote } from "../lib/bookPricing";
 
 interface CreatorDashboardProps {
   navigate: (p: Page) => void;
@@ -42,16 +43,33 @@ function useFileUpload() {
   return { upload, progress };
 }
 
-function BookForm({
-  onSubmit,
-}: { onSubmit: (b: Partial<Book> & { coverFile?: File }) => void }) {
+interface BookFormData {
+  title: string;
+  description: string;
+  genre: string;
+  priceCents: bigint;
+  offlinePriceCents: [] | [bigint];
+  offlineLocation?: string;
+  coverFile?: File;
+}
+
+function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [genre, setGenre] = useState("");
-  const [price, setPrice] = useState("");
+  const [onlinePrice, setOnlinePrice] = useState("");
+  const [offlinePrice, setOfflinePrice] = useState("");
   const [coverFile, setCoverFile] = useState<File | undefined>();
   const [offlineLocation, setOfflineLocation] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const onlinePaise = onlinePrice
+    ? Math.round(Number.parseFloat(onlinePrice) * 100)
+    : 0;
+  const offlinePaise = offlinePrice
+    ? Math.round(Number.parseFloat(offlinePrice) * 100)
+    : 0;
+  const hasOfflineLocation = offlineLocation.trim().length > 0;
 
   return (
     <div className="space-y-4">
@@ -82,17 +100,26 @@ function BookForm({
           data-ocid="book_form.genre.input"
         />
       </div>
+
+      {/* Online Price */}
       <div>
-        <Label>Price (USD)</Label>
+        <Label>Online Price (\u20b9)</Label>
         <Input
           type="number"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          value={onlinePrice}
+          onChange={(e) => setOnlinePrice(e.target.value)}
           className="mt-1"
-          placeholder="9.99"
-          data-ocid="book_form.price.input"
+          placeholder="e.g. 199"
+          data-ocid="book_form.online_price.input"
         />
+        {onlinePaise > 0 && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {splitNote(onlinePaise)}
+          </p>
+        )}
       </div>
+
+      {/* Offline Location (optional) */}
       <div>
         <Label>Offline Location (optional)</Label>
         <Input
@@ -103,9 +130,36 @@ function BookForm({
           data-ocid="book_form.offline_location.input"
         />
         <p className="text-xs text-muted-foreground mt-1">
-          Where can readers find this book offline?
+          Where can readers find this book offline? Leave blank if not available
+          offline.
         </p>
       </div>
+
+      {/* Offline Price — only shown when location is filled */}
+      {hasOfflineLocation && (
+        <div>
+          <Label>
+            Offline Price (\u20b9){" "}
+            <span className="text-muted-foreground font-normal">
+              (for physical copy)
+            </span>
+          </Label>
+          <Input
+            type="number"
+            value={offlinePrice}
+            onChange={(e) => setOfflinePrice(e.target.value)}
+            className="mt-1"
+            placeholder="e.g. 299"
+            data-ocid="book_form.offline_price.input"
+          />
+          {offlinePaise > 0 && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {splitNote(offlinePaise)}
+            </p>
+          )}
+        </div>
+      )}
+
       <div>
         <Label>Cover Image</Label>
         <div className="mt-1 flex items-center gap-3">
@@ -128,6 +182,7 @@ function BookForm({
           />
         </div>
       </div>
+
       <Button
         className="w-full"
         onClick={() =>
@@ -135,12 +190,16 @@ function BookForm({
             title,
             description,
             genre,
-            priceCents: BigInt(Math.round(Number.parseFloat(price) * 100)),
+            priceCents: BigInt(onlinePaise),
+            offlinePriceCents:
+              hasOfflineLocation && offlinePaise > 0
+                ? [BigInt(offlinePaise)]
+                : [],
+            offlineLocation: offlineLocation.trim() || undefined,
             coverFile,
-            offlineLocation: offlineLocation || undefined,
           })
         }
-        disabled={!title || !price}
+        disabled={!title || !onlinePrice}
         data-ocid="book_form.submit.submit_button"
       >
         Save Book
@@ -299,23 +358,37 @@ export default function CreatorDashboard({
   });
 
   const submitBook = useMutation({
-    mutationFn: async (data: Partial<Book> & { coverFile?: File }) => {
+    mutationFn: async (data: BookFormData) => {
       let coverImageId = ExternalBlob.fromBytes(new Uint8Array());
       if (data.coverFile) {
         coverImageId = await upload(data.coverFile);
       }
       const principal = identity!.getPrincipal();
-      await actor!.submitBook({
+      const book: Book = {
         id: crypto.randomUUID(),
-        title: data.title ?? "",
-        description: data.description ?? "",
-        genre: data.genre ?? "",
-        priceCents: data.priceCents ?? BigInt(0),
+        title: data.title,
+        description: data.description,
+        genre: data.genre,
+        priceCents: data.priceCents,
         coverImageId,
         author: principal,
         isPublished: false,
         offlineLocation: data.offlineLocation,
-      } as Book);
+      };
+      // Use new API if available, fall back to legacy submitBook
+      const a = actor as any;
+      if (typeof a.submitBookWithPricing === "function") {
+        await a.submitBookWithPricing(book, data.offlinePriceCents);
+      } else {
+        await actor!.submitBook(book);
+        // Separately set offline price if API exists
+        if (
+          data.offlinePriceCents.length > 0 &&
+          typeof a.setBookOfflinePrice === "function"
+        ) {
+          await a.setBookOfflinePrice(book.id, data.offlinePriceCents);
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["my-books"] });
@@ -331,12 +404,8 @@ export default function CreatorDashboard({
     ) => {
       let videoId = ExternalBlob.fromBytes(new Uint8Array());
       let thumbnailId = ExternalBlob.fromBytes(new Uint8Array());
-      if (data.videoFile) {
-        videoId = await upload(data.videoFile);
-      }
-      if (data.thumbFile) {
-        thumbnailId = await upload(data.thumbFile);
-      }
+      if (data.videoFile) videoId = await upload(data.videoFile);
+      if (data.thumbFile) thumbnailId = await upload(data.thumbFile);
       const principal = identity!.getPrincipal();
       await actor!.submitShortFilm({
         id: crypto.randomUUID(),
@@ -402,7 +471,7 @@ export default function CreatorDashboard({
               Total Earnings
             </div>
             <p className="font-bold text-xl text-primary">
-              ${(Number(earnings) / 100).toFixed(2)}
+              {formatINR(earnings)}
             </p>
           </div>
         )}
@@ -473,7 +542,7 @@ export default function CreatorDashboard({
                     </div>
                   </div>
                   <span className="text-primary font-bold">
-                    ${(Number(book.priceCents) / 100).toFixed(2)}
+                    {formatINR(book.priceCents)}
                   </span>
                   <Button
                     variant="ghost"

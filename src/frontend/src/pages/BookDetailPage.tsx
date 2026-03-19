@@ -1,13 +1,20 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { ArrowLeft, BookOpen, Loader2, ShoppingCart } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  ArrowLeft,
+  BookOpen,
+  Loader2,
+  MapPin,
+  ShoppingCart,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import type { Page } from "../App";
 import { useActor } from "../hooks/useActor";
 import { useInternetIdentity } from "../hooks/useInternetIdentity";
+import { formatINR, unwrapOptionalBigint } from "../lib/bookPricing";
 
 interface BookDetailProps {
   id: string;
@@ -31,9 +38,23 @@ export default function BookDetailPage({ id, navigate }: BookDetailProps) {
     enabled: !!actor && !!identity,
   });
 
+  // Fetch offline price from separate backend map
+  const { data: offlinePriceRaw } = useQuery({
+    queryKey: ["book-offline-price", id],
+    queryFn: async () => {
+      const a = actor as any;
+      if (typeof a.getBookOfflinePrice === "function") {
+        return a.getBookOfflinePrice(id) as Promise<[] | [bigint]>;
+      }
+      return [] as [] | [bigint];
+    },
+    enabled: !!actor && !!book,
+  });
+
+  const offlinePrice = unwrapOptionalBigint(offlinePriceRaw);
   const alreadyPurchased = myPurchases.some((p) => p.bookId === id);
 
-  const handleBuy = async () => {
+  const handleBuyOnline = async () => {
     if (!identity) {
       login();
       return;
@@ -45,7 +66,7 @@ export default function BookDetailPage({ id, navigate }: BookDetailProps) {
         [
           {
             productName: book.title,
-            currency: "usd",
+            currency: "inr",
             quantity: 1n,
             priceInCents: book.priceCents,
             productDescription: book.description,
@@ -123,32 +144,68 @@ export default function BookDetailPage({ id, navigate }: BookDetailProps) {
           <p className="text-foreground/80 leading-relaxed mb-6">
             {book.description}
           </p>
-          <div className="flex items-center gap-4">
-            <span className="text-accent text-3xl font-bold">
-              ${(Number(book.priceCents) / 100).toFixed(2)}
-            </span>
-            {alreadyPurchased ? (
-              <Button
-                variant="secondary"
-                disabled
-                data-ocid="book_detail.purchased.button"
-              >
-                Already Purchased
-              </Button>
-            ) : (
-              <Button
-                onClick={handleBuy}
-                disabled={isPurchasing}
-                size="lg"
-                data-ocid="book_detail.buy.button"
-              >
-                {isPurchasing ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+
+          {/* Pricing section */}
+          <div className="space-y-4">
+            {/* Online purchase */}
+            <div className="rounded-lg border border-border bg-card/50 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                    Buy Online
+                  </p>
+                  <p className="text-accent text-3xl font-bold mt-1">
+                    {formatINR(book.priceCents)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Digital copy &mdash; read in-app &amp; download
+                  </p>
+                </div>
+                {alreadyPurchased ? (
+                  <Button
+                    variant="secondary"
+                    disabled
+                    data-ocid="book_detail.purchased.button"
+                  >
+                    Already Purchased
+                  </Button>
                 ) : (
-                  <ShoppingCart className="h-4 w-4 mr-2" />
+                  <Button
+                    onClick={handleBuyOnline}
+                    disabled={isPurchasing}
+                    size="lg"
+                    data-ocid="book_detail.buy.button"
+                  >
+                    {isPurchasing ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <ShoppingCart className="h-4 w-4 mr-2" />
+                    )}
+                    {isPurchasing ? "Processing..." : "Buy Now"}
+                  </Button>
                 )}
-                {isPurchasing ? "Processing..." : "Buy Now"}
-              </Button>
+              </div>
+            </div>
+
+            {/* Offline purchase — only shown when location + offline price exist */}
+            {offlinePrice !== null && book.offlineLocation && (
+              <div className="rounded-lg border border-border bg-card/50 p-4">
+                <p className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+                  Buy Offline (Physical Copy)
+                </p>
+                <p className="text-primary text-2xl font-bold mt-1">
+                  {formatINR(offlinePrice)}
+                </p>
+                <div className="flex items-start gap-2 mt-2">
+                  <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <p className="text-sm text-foreground/80">
+                    {book.offlineLocation}
+                  </p>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Visit the location above to purchase a physical copy.
+                </p>
+              </div>
             )}
           </div>
         </div>
