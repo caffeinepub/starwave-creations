@@ -19,12 +19,14 @@ export interface TransformationOutput {
     body: Uint8Array;
     headers: Array<http_header>;
 }
+// Book now includes optional fileId (stored separately in backend)
 export interface Book {
     id: string;
     title: string;
     offlineLocation?: string;
     isPublished: boolean;
     coverImageId: ExternalBlob;
+    fileId?: ExternalBlob;
     publishedAt?: bigint;
     description: string;
     author: Principal;
@@ -90,11 +92,13 @@ export interface StripeConfiguration {
     allowedCountries: Array<string>;
     secretKey: string;
 }
+// UserProfile now includes optional profilePictureId (stored separately in backend)
 export interface UserProfile {
     name: string;
     role: string;
     email?: string;
     phone?: string;
+    profilePictureId?: ExternalBlob;
 }
 export enum UserRole {
     admin = "admin",
@@ -112,6 +116,7 @@ export interface backendInterface {
     deleteBook(id: string): Promise<void>;
     deleteShortFilm(id: string): Promise<void>;
     editBook(id: string, book: Book): Promise<void>;
+    editBookWithPricing(id: string, book: Book, offlinePriceCents: bigint | null): Promise<void>;
     editShortFilm(id: string, film: ShortFilm): Promise<void>;
     fetchBooks(): Promise<Array<Book>>;
     fetchShortFilms(): Promise<Array<ShortFilm>>;
@@ -128,6 +133,7 @@ export interface backendInterface {
         role: string;
     }>>;
     getBook(id: string): Promise<Book | null>;
+    getBookOfflinePrice(bookId: string): Promise<bigint | null>;
     getCallerUserProfile(): Promise<UserProfile | null>;
     getCallerUserRole(): Promise<UserRole>;
     getCreatorProfiles(): Promise<Array<{
@@ -136,7 +142,9 @@ export interface backendInterface {
         role: string;
         email?: string;
         phone?: string;
+        profilePictureId?: ExternalBlob;
     }>>;
+    getFirstAdmin(): Promise<Principal | null>;
     getMyBooks(): Promise<Array<Book>>;
     getMyEarnings(): Promise<bigint>;
     getMyPurchases(): Promise<Array<PurchaseRecord>>;
@@ -152,9 +160,12 @@ export interface backendInterface {
     isCallerAdmin(): Promise<boolean>;
     isStripeConfigured(): Promise<boolean>;
     rejectContent(id: string, contentType: string): Promise<void>;
+    removeAdmin(user: Principal): Promise<void>;
     saveCallerUserProfile(profile: UserProfile): Promise<void>;
+    setBookOfflinePrice(bookId: string, offlinePriceCents: bigint | null): Promise<void>;
     setStripeConfiguration(config: StripeConfiguration): Promise<void>;
     submitBook(book: Book): Promise<void>;
+    submitBookWithPricing(book: Book, offlinePriceCents: bigint | null): Promise<void>;
     submitShortFilm(film: ShortFilm): Promise<void>;
     deleteUserProfile(user: Principal): Promise<void>;
     getDeletedProfiles(): Promise<Array<{ principal: Principal; name: string; role: string }>>;

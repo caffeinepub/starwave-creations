@@ -255,6 +255,8 @@ export interface backendInterface {
     restoreUserProfile(user: Principal): Promise<void>;
     restrictCreatorFromPublishing(user: Principal): Promise<void>;
     unrestrictCreatorFromPublishing(user: Principal): Promise<void>;
+    getFirstAdmin(): Promise<Principal | null>;
+    removeAdmin(user: Principal): Promise<void>;
     transform(input: TransformationInput): Promise<TransformationOutput>;
 }
 import type { Book as _Book, ExternalBlob as _ExternalBlob, ShortFilm as _ShortFilm, StripeSessionStatus as _StripeSessionStatus, UserProfile as _UserProfile, UserRole as _UserRole, _CaffeineStorageRefillInformation as __CaffeineStorageRefillInformation, _CaffeineStorageRefillResult as __CaffeineStorageRefillResult } from "./declarations/backend.did.d.ts";
@@ -988,6 +990,16 @@ export class Backend implements backendInterface {
         if (this.processError) {
             try { await (this.actor as any).unrestrictCreatorFromPublishing(arg0); } catch(e) { this.processError(e); throw new Error("unreachable"); }
         } else { await (this.actor as any).unrestrictCreatorFromPublishing(arg0); }
+    }
+    async getFirstAdmin(): Promise<Principal | null> {
+        if (this.processError) {
+            try { const r = await (this.actor as any).getFirstAdmin(); return r[0] ?? null; } catch(e) { this.processError(e); throw new Error("unreachable"); }
+        } else { const r = await (this.actor as any).getFirstAdmin(); return r[0] ?? null; }
+    }
+    async removeAdmin(arg0: Principal): Promise<void> {
+        if (this.processError) {
+            try { await (this.actor as any).removeAdmin(arg0); } catch(e) { this.processError(e); throw new Error("unreachable"); }
+        } else { await (this.actor as any).removeAdmin(arg0); }
     }
 }
 async function from_candid_Book_n16(_uploadFile: (file: ExternalBlob) => Promise<Uint8Array>, _downloadFile: (file: Uint8Array) => Promise<ExternalBlob>, value: _Book): Promise<Book> {

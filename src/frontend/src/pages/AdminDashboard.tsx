@@ -125,6 +125,21 @@ export default function AdminDashboard({
     restrictedCreators.map((p: Principal) => p.toString()),
   );
 
+  const { data: firstAdmin } = useQuery<Principal | null>({
+    queryKey: ["first-admin"],
+    queryFn: async () => {
+      const result = await actor!.getFirstAdmin();
+      return result ?? null;
+    },
+    enabled: !!actor && !!identity && !!isAdmin,
+  });
+
+  const callerPrincipal = identity?.getPrincipal();
+  const isFirstAdmin =
+    callerPrincipal && firstAdmin
+      ? callerPrincipal.toString() === firstAdmin.toString()
+      : false;
+
   const approveMutation = useMutation({
     mutationFn: ({ id, type }: { id: string; type: string }) =>
       actor!.approveContent(id, type === "film" ? "shortFilm" : type),
@@ -269,6 +284,23 @@ export default function AdminDashboard({
       );
     } finally {
       setIsAssigningAdmin(false);
+    }
+  };
+
+  const handleRemoveAdmin = async (adminPrincipal: Principal) => {
+    if (!actor) return;
+    if (
+      !window.confirm(
+        "Remove this user's admin access? They will lose all admin privileges.",
+      )
+    )
+      return;
+    try {
+      await actor.removeAdmin(adminPrincipal);
+      toast.success("Admin access removed.");
+      queryClient.invalidateQueries({ queryKey: ["all-user-profiles"] });
+    } catch {
+      toast.error("Failed to remove admin. Only the first admin can do this.");
     }
   };
 
@@ -1033,37 +1065,120 @@ export default function AdminDashboard({
           </div>
         </TabsContent>
         <TabsContent value="team">
-          <div className="max-w-md">
-            <h2 className="font-semibold text-lg mb-2">Add Admin</h2>
-            <p className="text-muted-foreground text-sm mb-6">
-              Enter a user's Principal ID to grant them admin access. They can
-              find their Principal ID by signing in and checking their profile.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="principal-id">User Principal ID</Label>
-                <Input
-                  id="principal-id"
-                  type="text"
-                  value={principalInput}
-                  onChange={(e) => setPrincipalInput(e.target.value)}
-                  placeholder="aaaaa-bbbbb-ccccc-ddddd-eee"
-                  className="mt-1 font-mono text-sm"
-                  data-ocid="admin.team.input"
-                />
+          <div className="max-w-2xl space-y-8">
+            {/* Current Admins List */}
+            <div>
+              <h2 className="font-semibold text-lg mb-2">Current Admins</h2>
+              <p className="text-muted-foreground text-sm mb-4">
+                {isFirstAdmin
+                  ? "As the first admin, you can remove any admin you previously added."
+                  : "Only the first admin can remove other admins."}
+              </p>
+              {allUserProfiles.filter((u) => u.role === "admin").length ===
+              0 ? (
+                <div
+                  className="text-center py-6 text-muted-foreground border border-dashed border-border rounded-lg"
+                  data-ocid="admin.team.empty_state"
+                >
+                  No other admins yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {allUserProfiles
+                    .filter((u) => u.role === "admin")
+                    .map((adminUser, i) => {
+                      const isThisFirstAdmin = firstAdmin
+                        ? adminUser.principal.toString() ===
+                          firstAdmin.toString()
+                        : false;
+                      const isYou = callerPrincipal
+                        ? adminUser.principal.toString() ===
+                          callerPrincipal.toString()
+                        : false;
+                      return (
+                        <div
+                          key={adminUser.principal.toString()}
+                          className="flex items-center justify-between p-3 rounded-lg border border-border bg-card"
+                          data-ocid={`admin.team.item.${i + 1}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Shield className="h-4 w-4 text-purple-400" />
+                            <div>
+                              <span className="font-medium">
+                                {adminUser.name || "Unnamed"}
+                                {isYou && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="ml-2 text-xs"
+                                  >
+                                    You
+                                  </Badge>
+                                )}
+                                {isThisFirstAdmin && (
+                                  <Badge className="ml-2 text-xs bg-yellow-500 text-black">
+                                    First Admin
+                                  </Badge>
+                                )}
+                              </span>
+                              <p className="text-xs text-muted-foreground font-mono truncate max-w-xs">
+                                {adminUser.principal.toString()}
+                              </p>
+                            </div>
+                          </div>
+                          {isFirstAdmin && !isThisFirstAdmin && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() =>
+                                handleRemoveAdmin(adminUser.principal)
+                              }
+                              data-ocid={`admin.team.delete_button.${i + 1}`}
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Remove Admin
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            {/* Add Admin Section */}
+            <div>
+              <h2 className="font-semibold text-lg mb-2">Add Admin</h2>
+              <p className="text-muted-foreground text-sm mb-6">
+                Enter a user's Principal ID to grant them admin access. They can
+                find their Principal ID by signing in and checking their
+                profile.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="principal-id">User Principal ID</Label>
+                  <Input
+                    id="principal-id"
+                    type="text"
+                    value={principalInput}
+                    onChange={(e) => setPrincipalInput(e.target.value)}
+                    placeholder="aaaaa-bbbbb-ccccc-ddddd-eee"
+                    className="mt-1 font-mono text-sm"
+                    data-ocid="admin.team.input"
+                  />
+                </div>
+                <Button
+                  onClick={handleMakeAdmin}
+                  disabled={isAssigningAdmin}
+                  data-ocid="admin.team.submit_button"
+                >
+                  {isAssigningAdmin ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <UserPlus className="h-4 w-4 mr-2" />
+                  )}
+                  {isAssigningAdmin ? "Granting Access..." : "Make Admin"}
+                </Button>
               </div>
-              <Button
-                onClick={handleMakeAdmin}
-                disabled={isAssigningAdmin}
-                data-ocid="admin.team.submit_button"
-              >
-                {isAssigningAdmin ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <UserPlus className="h-4 w-4 mr-2" />
-                )}
-                {isAssigningAdmin ? "Granting Access..." : "Make Admin"}
-              </Button>
             </div>
           </div>
         </TabsContent>

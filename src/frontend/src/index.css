@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -6,74 +6,79 @@
 
 @layer base {
   :root {
-    --background: 0.97 0.004 280;
-    --foreground: 0.15 0.03 280;
+    --background: 0.97 0.004 270;
+    --foreground: 0.15 0.03 270;
     --card: 1 0 0;
-    --card-foreground: 0.15 0.03 280;
+    --card-foreground: 0.15 0.03 270;
     --popover: 1 0 0;
-    --popover-foreground: 0.15 0.03 280;
-    --primary: 0.5 0.22 290;
-    --primary-foreground: 0.98 0.005 290;
-    --secondary: 0.92 0.015 280;
-    --secondary-foreground: 0.25 0.05 280;
-    --muted: 0.93 0.01 280;
-    --muted-foreground: 0.5 0.04 280;
-    --accent: 0.55 0.2 265;
-    --accent-foreground: 0.98 0.005 265;
+    --popover-foreground: 0.15 0.03 270;
+    --primary: 0.55 0.24 270;
+    --primary-foreground: 0.98 0.005 270;
+    --secondary: 0.92 0.012 270;
+    --secondary-foreground: 0.25 0.05 270;
+    --muted: 0.93 0.01 270;
+    --muted-foreground: 0.5 0.04 270;
+    --accent: 0.58 0.21 260;
+    --accent-foreground: 0.98 0.005 260;
     --destructive: 0.55 0.22 25;
     --destructive-foreground: 0.98 0.005 25;
-    --border: 0.87 0.02 280;
-    --input: 0.87 0.02 280;
-    --ring: 0.5 0.22 290;
-    --radius: 0.5rem;
-    --chart-1: 0.55 0.22 290;
-    --chart-2: 0.6 0.2 265;
+    --border: 0.87 0.02 270;
+    --input: 0.87 0.02 270;
+    --ring: 0.55 0.24 270;
+    --radius: 0.625rem;
+    --chart-1: 0.55 0.24 270;
+    --chart-2: 0.6 0.2 260;
     --chart-3: 0.6 0.18 60;
     --chart-4: 0.6 0.18 25;
-    --chart-5: 0.6 0.18 200;
-    --sidebar: 0.95 0.008 280;
-    --sidebar-foreground: 0.15 0.03 280;
-    --sidebar-primary: 0.5 0.22 290;
-    --sidebar-primary-foreground: 0.98 0.005 290;
-    --sidebar-accent: 0.9 0.015 280;
-    --sidebar-accent-foreground: 0.25 0.05 280;
-    --sidebar-border: 0.87 0.02 280;
-    --sidebar-ring: 0.5 0.22 290;
+    --chart-5: 0.65 0.2 200;
+    --sidebar: 0.95 0.008 270;
+    --sidebar-foreground: 0.15 0.03 270;
+    --sidebar-primary: 0.55 0.24 270;
+    --sidebar-primary-foreground: 0.98 0.005 270;
+    --sidebar-accent: 0.9 0.015 270;
+    --sidebar-accent-foreground: 0.25 0.05 270;
+    --sidebar-border: 0.87 0.02 270;
+    --sidebar-ring: 0.55 0.24 270;
   }
 
   .dark {
-    --background: 0.08 0.025 280;
-    --foreground: 0.95 0.01 280;
-    --card: 0.12 0.03 280;
-    --card-foreground: 0.95 0.01 280;
-    --popover: 0.12 0.03 280;
-    --popover-foreground: 0.95 0.01 280;
-    --primary: 0.68 0.22 290;
-    --primary-foreground: 0.08 0.025 280;
-    --secondary: 0.18 0.04 280;
-    --secondary-foreground: 0.9 0.01 280;
-    --muted: 0.18 0.04 280;
-    --muted-foreground: 0.58 0.05 280;
-    --accent: 0.6 0.22 265;
-    --accent-foreground: 0.08 0.025 265;
-    --destructive: 0.6 0.22 25;
+    /* Deep space: very dark blue-purple base */
+    --background: 0.07 0.022 270;
+    --foreground: 0.96 0.008 270;
+    --card: 0.11 0.028 272;
+    --card-foreground: 0.96 0.008 270;
+    --popover: 0.1 0.026 272;
+    --popover-foreground: 0.96 0.008 270;
+    /* Electric blue-violet primary */
+    --primary: 0.65 0.25 270;
+    --primary-foreground: 0.07 0.022 270;
+    /* Deep purple secondary */
+    --secondary: 0.16 0.038 272;
+    --secondary-foreground: 0.88 0.01 270;
+    --muted: 0.16 0.032 272;
+    --muted-foreground: 0.6 0.05 275;
+    /* Cyan accent */
+    --accent: 0.72 0.2 225;
+    --accent-foreground: 0.07 0.022 225;
+    --destructive: 0.58 0.22 25;
     --destructive-foreground: 0.98 0.005 25;
-    --border: 0.22 0.04 280;
-    --input: 0.22 0.04 280;
-    --ring: 0.68 0.22 290;
-    --chart-1: 0.68 0.22 290;
-    --chart-2: 0.65 0.2 265;
+    /* Subtle blue-purple border */
+    --border: 0.22 0.042 272;
+    --input: 0.18 0.038 272;
+    --ring: 0.65 0.25 270;
+    --chart-1: 0.65 0.25 270;
+    --chart-2: 0.72 0.2 225;
     --chart-3: 0.65 0.18 60;
     --chart-4: 0.65 0.18 25;
     --chart-5: 0.65 0.18 200;
-    --sidebar: 0.1 0.028 280;
-    --sidebar-foreground: 0.95 0.01 280;
-    --sidebar-primary: 0.68 0.22 290;
-    --sidebar-primary-foreground: 0.08 0.025 280;
-    --sidebar-accent: 0.16 0.04 280;
-    --sidebar-accent-foreground: 0.9 0.01 280;
-    --sidebar-border: 0.22 0.04 280;
-    --sidebar-ring: 0.68 0.22 290;
+    --sidebar: 0.09 0.025 272;
+    --sidebar-foreground: 0.96 0.008 270;
+    --sidebar-primary: 0.65 0.25 270;
+    --sidebar-primary-foreground: 0.07 0.022 270;
+    --sidebar-accent: 0.15 0.036 272;
+    --sidebar-accent-foreground: 0.88 0.01 270;
+    --sidebar-border: 0.22 0.042 272;
+    --sidebar-ring: 0.65 0.25 270;
   }
 
   * {
@@ -82,5 +87,144 @@
 
   body {
     @apply bg-background text-foreground font-sans dark;
+    background-image: radial-gradient(
+        ellipse 80% 60% at 50% -10%,
+        oklch(0.65 0.25 270 / 0.08),
+        transparent
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 80% 110%,
+        oklch(0.55 0.22 295 / 0.06),
+        transparent
+      );
+    background-attachment: fixed;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: oklch(0.07 0.022 270);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: oklch(0.25 0.05 270);
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.4 0.12 270);
+  }
+}
+
+@layer components {
+  /* Glassmorphism card */
+  .glass-card {
+    backdrop-filter: blur(12px);
+    border: 1px solid oklch(var(--border));
+    box-shadow: 0 4px 24px oklch(0.1 0.05 270 / 0.7), 0 1px 0
+      oklch(0.65 0.25 270 / 0.12) inset;
+  }
+
+  /* Section title underline glow */
+  .section-title {
+    @apply font-display font-bold relative inline-block;
+  }
+  .section-title::after {
+    content: "";
+    @apply absolute -bottom-2 left-0 w-full h-[2px] rounded-full;
+    background: linear-gradient(
+      90deg,
+      oklch(0.65 0.25 270),
+      oklch(0.72 0.2 225),
+      transparent
+    );
+    opacity: 0.7;
+  }
+
+  /* Glow icon wrapper */
+  .icon-glow {
+    @apply transition-all duration-300;
+  }
+  .icon-glow:hover {
+    filter: drop-shadow(0 0 6px oklch(0.65 0.25 270 / 0.8));
+  }
+
+  /* Neon badge */
+  .badge-glow {
+    box-shadow: 0 0 10px oklch(0.65 0.25 270 / 0.35);
+  }
+
+  /* Animated star shimmer */
+  @keyframes shimmer {
+    0%,
+    100% {
+      opacity: 0.6;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  .shimmer {
+    animation: shimmer 2.5s ease-in-out infinite;
+  }
+
+  /* Pulse glow animation */
+  @keyframes pulse-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 16px oklch(0.65 0.25 270 / 0.3);
+    }
+    50% {
+      box-shadow: 0 0 32px oklch(0.65 0.25 270 / 0.6), 0 0 64px
+        oklch(0.72 0.2 225 / 0.2);
+    }
+  }
+  .animate-pulse-glow {
+    animation: pulse-glow 3s ease-in-out infinite;
+  }
+
+  /* Starfield dots background */
+  .starfield {
+    background-image: radial-gradient(
+        1px 1px at 10% 20%,
+        oklch(0.96 0.008 270 / 0.4),
+        transparent
+      ),
+      radial-gradient(
+        1px 1px at 30% 70%,
+        oklch(0.96 0.008 270 / 0.3),
+        transparent
+      ),
+      radial-gradient(
+        1px 1px at 55% 35%,
+        oklch(0.96 0.008 270 / 0.5),
+        transparent
+      ),
+      radial-gradient(
+        1px 1px at 75% 80%,
+        oklch(0.96 0.008 270 / 0.3),
+        transparent
+      ),
+      radial-gradient(
+        1px 1px at 90% 15%,
+        oklch(0.96 0.008 270 / 0.4),
+        transparent
+      ),
+      radial-gradient(
+        1.5px 1.5px at 20% 50%,
+        oklch(0.72 0.2 225 / 0.3),
+        transparent
+      ),
+      radial-gradient(
+        1.5px 1.5px at 65% 10%,
+        oklch(0.65 0.25 270 / 0.3),
+        transparent
+      ),
+      radial-gradient(
+        1.5px 1.5px at 85% 55%,
+        oklch(0.55 0.22 295 / 0.25),
+        transparent
+      );
   }
 }

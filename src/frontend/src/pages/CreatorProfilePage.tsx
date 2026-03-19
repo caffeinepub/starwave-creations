@@ -84,6 +84,8 @@ export default function CreatorProfilePage({
     );
   }
 
+  const avatarUrl = (creator as any).profilePictureId?.getDirectURL?.();
+
   return (
     <div className="container mx-auto px-4 py-12 max-w-5xl">
       <Button
@@ -98,8 +100,16 @@ export default function CreatorProfilePage({
       {/* Creator Info */}
       <div className="rounded-xl border border-border bg-card p-8 mb-10">
         <div className="flex flex-col sm:flex-row items-start gap-6">
-          <div className="h-20 w-20 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
-            <Users className="h-10 w-10 text-primary" />
+          <div className="h-20 w-20 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center shrink-0 border-2 border-primary/30">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={creator.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Users className="h-10 w-10 text-primary" />
+            )}
           </div>
           <div className="flex-1">
             <h1 className="font-display text-3xl font-bold mb-2">

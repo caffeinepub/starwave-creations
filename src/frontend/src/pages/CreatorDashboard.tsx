@@ -15,11 +15,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
-  DollarSign,
   Film,
   Loader2,
   Plus,
   Trash2,
+  TrendingUp,
   Upload,
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -51,17 +51,21 @@ interface BookFormData {
   offlinePriceCents: [] | [bigint];
   offlineLocation?: string;
   coverFile?: File;
+  bookFile?: File;
 }
 
 function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [creatorNote, setCreatorNote] = useState("");
   const [genre, setGenre] = useState("");
   const [onlinePrice, setOnlinePrice] = useState("");
   const [offlinePrice, setOfflinePrice] = useState("");
   const [coverFile, setCoverFile] = useState<File | undefined>();
+  const [bookFile, setBookFile] = useState<File | undefined>();
   const [offlineLocation, setOfflineLocation] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
+  const bookFileRef = useRef<HTMLInputElement>(null);
 
   const onlinePaise = onlinePrice
     ? Math.round(Number.parseFloat(onlinePrice) * 100)
@@ -71,6 +75,10 @@ function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
     : 0;
   const hasOfflineLocation = offlineLocation.trim().length > 0;
 
+  const finalDescription =
+    description +
+    (creatorNote.trim() ? `\n\nCreator's Note: ${creatorNote.trim()}` : "");
+
   return (
     <div className="space-y-4">
       <div>
@@ -78,7 +86,7 @@ function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30 focus:border-primary/60 transition-all duration-200"
           data-ocid="book_form.title.input"
         />
       </div>
@@ -87,45 +95,57 @@ function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
         <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30 focus:border-primary/60 transition-all duration-200"
           data-ocid="book_form.description.textarea"
         />
+      </div>
+      <div>
+        <Label>
+          Creator's Note{" "}
+          <span className="text-muted-foreground font-normal">(optional)</span>
+        </Label>
+        <Textarea
+          value={creatorNote}
+          onChange={(e) => setCreatorNote(e.target.value)}
+          placeholder="Add a personal note or message for your readers..."
+          className="mt-1 border-border/60 bg-secondary/30 focus:border-primary/60 transition-all duration-200 min-h-[80px]"
+          data-ocid="book_form.creator_note.textarea"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          This note will appear at the end of your book description.
+        </p>
       </div>
       <div>
         <Label>Genre</Label>
         <Input
           value={genre}
           onChange={(e) => setGenre(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30"
           data-ocid="book_form.genre.input"
         />
       </div>
 
-      {/* Online Price */}
       <div>
-        <Label>Online Price (\u20b9)</Label>
+        <Label>Online Price (₹)</Label>
         <Input
           type="number"
           value={onlinePrice}
           onChange={(e) => setOnlinePrice(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30"
           placeholder="e.g. 199"
           data-ocid="book_form.online_price.input"
         />
         {onlinePaise > 0 && (
-          <p className="text-xs text-muted-foreground mt-1">
-            {splitNote(onlinePaise)}
-          </p>
+          <p className="text-xs text-accent mt-1">{splitNote(onlinePaise)}</p>
         )}
       </div>
 
-      {/* Offline Location (optional) */}
       <div>
         <Label>Offline Location (optional)</Label>
         <Input
           value={offlineLocation}
           onChange={(e) => setOfflineLocation(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30"
           placeholder="e.g. My Bookshop, Hyderabad"
           data-ocid="book_form.offline_location.input"
         />
@@ -135,11 +155,10 @@ function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
         </p>
       </div>
 
-      {/* Offline Price — only shown when location is filled */}
       {hasOfflineLocation && (
         <div>
           <Label>
-            Offline Price (\u20b9){" "}
+            Offline Price (₹){" "}
             <span className="text-muted-foreground font-normal">
               (for physical copy)
             </span>
@@ -148,12 +167,12 @@ function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
             type="number"
             value={offlinePrice}
             onChange={(e) => setOfflinePrice(e.target.value)}
-            className="mt-1"
+            className="mt-1 border-border/60 bg-secondary/30"
             placeholder="e.g. 299"
             data-ocid="book_form.offline_price.input"
           />
           {offlinePaise > 0 && (
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-xs text-accent mt-1">
               {splitNote(offlinePaise)}
             </p>
           )}
@@ -168,6 +187,7 @@ function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
             variant="outline"
             size="sm"
             onClick={() => fileRef.current?.click()}
+            className="border-border/60 hover:border-primary/50 hover:bg-primary/10 transition-all duration-200"
             data-ocid="book_form.cover.upload_button"
           >
             <Upload className="h-4 w-4 mr-1" />
@@ -183,12 +203,40 @@ function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
         </div>
       </div>
 
+      <div>
+        <Label>Book Content File (PDF, EPUB, DOC) — optional</Label>
+        <div className="mt-1 flex items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => bookFileRef.current?.click()}
+            className="border-border/60 hover:border-primary/50 hover:bg-primary/10 transition-all duration-200"
+            data-ocid="book_form.book_file.upload_button"
+          >
+            <Upload className="h-4 w-4 mr-1" />
+            {bookFile ? bookFile.name : "Choose Book File"}
+          </Button>
+          <input
+            ref={bookFileRef}
+            type="file"
+            accept=".pdf,.epub,.doc,.docx"
+            className="hidden"
+            onChange={(e) => setBookFile(e.target.files?.[0])}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground mt-1">
+          Upload the book file so purchased readers can read and download it
+          online.
+        </p>
+      </div>
+
       <Button
-        className="w-full"
+        className="w-full shadow-glow-blue hover:shadow-glow-purple transition-all duration-200 font-semibold"
         onClick={() =>
           onSubmit({
             title,
-            description,
+            description: finalDescription,
             genre,
             priceCents: BigInt(onlinePaise),
             offlinePriceCents:
@@ -197,6 +245,7 @@ function BookForm({ onSubmit }: { onSubmit: (data: BookFormData) => void }) {
                 : [],
             offlineLocation: offlineLocation.trim() || undefined,
             coverFile,
+            bookFile,
           })
         }
         disabled={!title || !onlinePrice}
@@ -217,12 +266,17 @@ function FilmFormComponent({
 }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [creatorNote, setCreatorNote] = useState("");
   const [genre, setGenre] = useState("");
   const [duration, setDuration] = useState("");
   const [videoFile, setVideoFile] = useState<File | undefined>();
   const [thumbFile, setThumbFile] = useState<File | undefined>();
   const videoRef = useRef<HTMLInputElement>(null);
   const thumbRef = useRef<HTMLInputElement>(null);
+
+  const finalDescription =
+    description +
+    (creatorNote.trim() ? `\n\nCreator's Note: ${creatorNote.trim()}` : "");
 
   return (
     <div className="space-y-4">
@@ -231,7 +285,7 @@ function FilmFormComponent({
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30 focus:border-primary/60 transition-all duration-200"
           data-ocid="film_form.title.input"
         />
       </div>
@@ -240,16 +294,32 @@ function FilmFormComponent({
         <Textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30 focus:border-primary/60 transition-all duration-200"
           data-ocid="film_form.description.textarea"
         />
+      </div>
+      <div>
+        <Label>
+          Creator's Note{" "}
+          <span className="text-muted-foreground font-normal">(optional)</span>
+        </Label>
+        <Textarea
+          value={creatorNote}
+          onChange={(e) => setCreatorNote(e.target.value)}
+          placeholder="Add a personal note or message for your viewers..."
+          className="mt-1 border-border/60 bg-secondary/30 focus:border-primary/60 transition-all duration-200 min-h-[80px]"
+          data-ocid="film_form.creator_note.textarea"
+        />
+        <p className="text-xs text-muted-foreground mt-1">
+          This note will appear at the end of your film description.
+        </p>
       </div>
       <div>
         <Label>Genre</Label>
         <Input
           value={genre}
           onChange={(e) => setGenre(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30"
           data-ocid="film_form.genre.input"
         />
       </div>
@@ -259,7 +329,7 @@ function FilmFormComponent({
           type="number"
           value={duration}
           onChange={(e) => setDuration(e.target.value)}
-          className="mt-1"
+          className="mt-1 border-border/60 bg-secondary/30"
           placeholder="120"
           data-ocid="film_form.duration.input"
         />
@@ -272,6 +342,7 @@ function FilmFormComponent({
             variant="outline"
             size="sm"
             onClick={() => videoRef.current?.click()}
+            className="border-border/60 hover:border-accent/50 hover:bg-accent/10 hover:text-accent transition-all duration-200"
             data-ocid="film_form.video.upload_button"
           >
             <Upload className="h-4 w-4 mr-1" />
@@ -294,6 +365,7 @@ function FilmFormComponent({
             variant="outline"
             size="sm"
             onClick={() => thumbRef.current?.click()}
+            className="border-border/60 hover:border-primary/50 hover:bg-primary/10 transition-all duration-200"
             data-ocid="film_form.thumbnail.upload_button"
           >
             <Upload className="h-4 w-4 mr-1" />
@@ -309,11 +381,11 @@ function FilmFormComponent({
         </div>
       </div>
       <Button
-        className="w-full"
+        className="w-full shadow-glow-blue hover:shadow-glow-purple transition-all duration-200 font-semibold"
         onClick={() =>
           onSubmit({
             title,
-            description,
+            description: finalDescription,
             genre,
             duration: BigInt(duration || "0"),
             videoFile,
@@ -339,13 +411,13 @@ export default function CreatorDashboard({
   const [bookDialogOpen, setBookDialogOpen] = useState(false);
   const [filmDialogOpen, setFilmDialogOpen] = useState(false);
 
-  const { data: myBooks, isLoading: booksLoading } = useQuery({
+  const { data: myBooks = [], isLoading: loadingBooks } = useQuery({
     queryKey: ["my-books"],
     queryFn: () => actor!.getMyBooks(),
     enabled: !!actor && !!identity,
   });
 
-  const { data: myFilms, isLoading: filmsLoading } = useQuery({
+  const { data: myFilms = [], isLoading: loadingFilms } = useQuery({
     queryKey: ["my-films"],
     queryFn: () => actor!.getMyShortFilms(),
     enabled: !!actor && !!identity,
@@ -363,25 +435,30 @@ export default function CreatorDashboard({
       if (data.coverFile) {
         coverImageId = await upload(data.coverFile);
       }
+      let fileId: ExternalBlob | undefined;
+      if (data.bookFile) {
+        fileId = ExternalBlob.fromBytes(
+          new Uint8Array(await data.bookFile.arrayBuffer()),
+        );
+      }
       const principal = identity!.getPrincipal();
-      const book: Book = {
+      const book = {
         id: crypto.randomUUID(),
         title: data.title,
         description: data.description,
         genre: data.genre,
         priceCents: data.priceCents,
         coverImageId,
+        fileId,
         author: principal,
         isPublished: false,
         offlineLocation: data.offlineLocation,
-      };
-      // Use new API if available, fall back to legacy submitBook
+      } as Book;
       const a = actor as any;
       if (typeof a.submitBookWithPricing === "function") {
         await a.submitBookWithPricing(book, data.offlinePriceCents);
       } else {
         await actor!.submitBook(book);
-        // Separately set offline price if API exists
         if (
           data.offlinePriceCents.length > 0 &&
           typeof a.setBookOfflinePrice === "function"
@@ -445,112 +522,160 @@ export default function CreatorDashboard({
     onError: () => toast.error("Failed to delete film."),
   });
 
-  if (!identity) {
-    return (
-      <div className="container mx-auto px-4 py-20 text-center">
-        <p className="text-muted-foreground">
-          Please sign in to access Creator Dashboard.
-        </p>
-      </div>
-    );
-  }
+  const earningsData = (earnings as any)?.totalCreatorShareCents ?? BigInt(0);
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-5xl">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="font-display text-3xl font-bold mb-1">
-            Creator Dashboard
-          </h1>
-          <p className="text-muted-foreground">Manage your books and films</p>
-        </div>
-        {earnings !== undefined && (
-          <div className="rounded-lg border border-border bg-card px-4 py-3 text-right">
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <DollarSign className="h-4 w-4" />
-              Total Earnings
-            </div>
-            <p className="font-bold text-xl text-primary">
-              {formatINR(earnings)}
-            </p>
+    <div className="container mx-auto px-4 py-8 max-w-5xl">
+      <div className="mb-8">
+        <h1 className="font-display text-3xl font-bold text-foreground mb-1">
+          Creator Dashboard
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          Manage your books and films, track your earnings.
+        </p>
+      </div>
+
+      {/* Earnings summary */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="rounded-xl border border-border bg-card/60 p-5 shadow-glow-blue">
+          <div className="flex items-center gap-2 mb-2">
+            <TrendingUp className="h-5 w-5 text-accent" />
+            <span className="text-sm font-medium text-muted-foreground">
+              Your Earnings (60%)
+            </span>
           </div>
-        )}
+          <p className="text-2xl font-bold text-accent">
+            {formatINR(earningsData)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-card/60 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <BookOpen className="h-5 w-5 text-primary" />
+            <span className="text-sm font-medium text-muted-foreground">
+              Books
+            </span>
+          </div>
+          <p className="text-2xl font-bold">{myBooks.length}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card/60 p-5">
+          <div className="flex items-center gap-2 mb-2">
+            <Film className="h-5 w-5 text-primary" />
+            <span className="text-sm font-medium text-muted-foreground">
+              Films
+            </span>
+          </div>
+          <p className="text-2xl font-bold">{myFilms.length}</p>
+        </div>
       </div>
 
       <Tabs defaultValue="books">
         <TabsList className="mb-6">
           <TabsTrigger value="books" data-ocid="creator.books.tab">
-            <BookOpen className="h-4 w-4 mr-2" /> My Books
+            <BookOpen className="h-4 w-4 mr-1.5" />
+            My Books
           </TabsTrigger>
           <TabsTrigger value="films" data-ocid="creator.films.tab">
-            <Film className="h-4 w-4 mr-2" /> My Films
+            <Film className="h-4 w-4 mr-1.5" />
+            My Films
           </TabsTrigger>
         </TabsList>
 
+        {/* Books tab */}
         <TabsContent value="books">
-          <div className="flex justify-end mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-lg">Your Books</h2>
             <Dialog open={bookDialogOpen} onOpenChange={setBookDialogOpen}>
               <DialogTrigger asChild>
-                <Button data-ocid="creator.add_book.open_modal_button">
-                  <Plus className="h-4 w-4 mr-2" /> Add Book
+                <Button
+                  size="sm"
+                  className="shadow-glow-blue hover:shadow-glow-purple transition-all"
+                  data-ocid="creator.add_book.open_modal_button"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Book
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Submit a Book</DialogTitle>
+                  <DialogTitle>Publish a New Book</DialogTitle>
                 </DialogHeader>
                 <BookForm onSubmit={(data) => submitBook.mutate(data)} />
+                {submitBook.isPending && (
+                  <div
+                    className="flex items-center gap-2 text-sm text-muted-foreground mt-2"
+                    data-ocid="creator.book_submit.loading_state"
+                  >
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading and submitting...
+                  </div>
+                )}
               </DialogContent>
             </Dialog>
           </div>
 
-          {booksLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
-                <Skeleton key={i} className="h-20 w-full rounded-lg" />
+          {loadingBooks ? (
+            <div className="space-y-3" data-ocid="creator.books.loading_state">
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : !myBooks || myBooks.length === 0 ? (
+          ) : myBooks.length === 0 ? (
             <div
-              className="text-center py-12 text-muted-foreground border border-border rounded-lg"
+              className="text-center py-12 text-muted-foreground"
               data-ocid="creator.books.empty_state"
             >
-              No books yet. Add your first book!
+              <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p>No books published yet. Add your first book!</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {myBooks.map((book, i) => (
+              {myBooks.map((book, idx) => (
                 <div
                   key={book.id}
-                  data-ocid={`creator.books.item.${i + 1}`}
-                  className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
+                  className="flex items-center gap-4 rounded-xl border border-border bg-card/50 p-4 shadow-sm hover:border-primary/30 transition-all duration-200"
+                  data-ocid={`creator.book.item.${idx + 1}`}
                 >
-                  <BookOpen className="h-8 w-8 text-muted-foreground shrink-0" />
+                  <div className="w-10 h-14 rounded bg-muted flex items-center justify-center flex-shrink-0">
+                    {book.coverImageId?.getDirectURL() ? (
+                      <img
+                        src={book.coverImageId.getDirectURL()}
+                        alt=""
+                        className="w-full h-full object-cover rounded"
+                      />
+                    ) : (
+                      <BookOpen className="h-5 w-5 text-muted-foreground/40" />
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{book.title}</p>
+                    <p className="font-medium truncate">{book.title}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="outline" className="text-xs">
                         {book.genre}
                       </Badge>
+                      <span className="text-xs text-accent font-medium">
+                        {formatINR(book.priceCents)}
+                      </span>
                       <Badge
-                        variant={book.isPublished ? "default" : "outline"}
+                        variant={book.isPublished ? "default" : "secondary"}
                         className="text-xs"
                       >
-                        {book.isPublished ? "Published" : "Pending"}
+                        {book.isPublished ? "Published" : "Pending Review"}
                       </Badge>
                     </div>
                   </div>
-                  <span className="text-primary font-bold">
-                    {formatINR(book.priceCents)}
-                  </span>
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="text-destructive hover:bg-destructive/10 flex-shrink-0"
                     onClick={() => deleteBook.mutate(book.id)}
-                    data-ocid={`creator.books.delete_button.${i + 1}`}
+                    disabled={deleteBook.isPending}
+                    data-ocid={`creator.book.delete_button.${idx + 1}`}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    {deleteBook.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               ))}
@@ -558,72 +683,105 @@ export default function CreatorDashboard({
           )}
         </TabsContent>
 
+        {/* Films tab */}
         <TabsContent value="films">
-          <div className="flex justify-end mb-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-lg">Your Films</h2>
             <Dialog open={filmDialogOpen} onOpenChange={setFilmDialogOpen}>
               <DialogTrigger asChild>
-                <Button data-ocid="creator.add_film.open_modal_button">
-                  <Plus className="h-4 w-4 mr-2" /> Add Film
+                <Button
+                  size="sm"
+                  className="shadow-glow-blue hover:shadow-glow-purple transition-all"
+                  data-ocid="creator.add_film.open_modal_button"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Film
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+              <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Submit a Short Film</DialogTitle>
+                  <DialogTitle>Upload a Short Film</DialogTitle>
                 </DialogHeader>
                 <FilmFormComponent
                   onSubmit={(data) => submitFilm.mutate(data)}
                 />
+                {submitFilm.isPending && (
+                  <div
+                    className="flex items-center gap-2 text-sm text-muted-foreground mt-2"
+                    data-ocid="creator.film_submit.loading_state"
+                  >
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Uploading and submitting...
+                  </div>
+                )}
               </DialogContent>
             </Dialog>
           </div>
 
-          {filmsLoading ? (
-            <div className="space-y-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                // biome-ignore lint/suspicious/noArrayIndexKey: skeleton
-                <Skeleton key={i} className="h-20 w-full rounded-lg" />
+          {loadingFilms ? (
+            <div className="space-y-3" data-ocid="creator.films.loading_state">
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
               ))}
             </div>
-          ) : !myFilms || myFilms.length === 0 ? (
+          ) : myFilms.length === 0 ? (
             <div
-              className="text-center py-12 text-muted-foreground border border-border rounded-lg"
+              className="text-center py-12 text-muted-foreground"
               data-ocid="creator.films.empty_state"
             >
-              No films yet. Add your first short film!
+              <Film className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p>No films uploaded yet. Upload your first short film!</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {myFilms.map((film, i) => (
+              {myFilms.map((film, idx) => (
                 <div
                   key={film.id}
-                  data-ocid={`creator.films.item.${i + 1}`}
-                  className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
+                  className="flex items-center gap-4 rounded-xl border border-border bg-card/50 p-4 shadow-sm hover:border-primary/30 transition-all duration-200"
+                  data-ocid={`creator.film.item.${idx + 1}`}
                 >
-                  <Film className="h-8 w-8 text-muted-foreground shrink-0" />
+                  <div className="w-16 h-10 rounded bg-muted flex items-center justify-center flex-shrink-0 overflow-hidden">
+                    {film.thumbnailId?.getDirectURL() ? (
+                      <img
+                        src={film.thumbnailId.getDirectURL()}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <Film className="h-5 w-5 text-muted-foreground/40" />
+                    )}
+                  </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{film.title}</p>
+                    <p className="font-medium truncate">{film.title}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="outline" className="text-xs">
                         {film.genre}
                       </Badge>
+                      <span className="text-xs text-muted-foreground">
+                        {Math.floor(Number(film.duration) / 60)}m{" "}
+                        {Number(film.duration) % 60}s
+                      </span>
                       <Badge
-                        variant={film.isPublished ? "default" : "outline"}
+                        variant={film.isPublished ? "default" : "secondary"}
                         className="text-xs"
                       >
-                        {film.isPublished ? "Published" : "Pending"}
+                        {film.isPublished ? "Published" : "Pending Review"}
                       </Badge>
                     </div>
                   </div>
-                  <span className="text-muted-foreground text-sm">
-                    {Math.floor(Number(film.duration) / 60)}m
-                  </span>
                   <Button
                     variant="ghost"
                     size="icon"
+                    className="text-destructive hover:bg-destructive/10 flex-shrink-0"
                     onClick={() => deleteFilm.mutate(film.id)}
-                    data-ocid={`creator.films.delete_button.${i + 1}`}
+                    disabled={deleteFilm.isPending}
+                    data-ocid={`creator.film.delete_button.${idx + 1}`}
                   >
-                    <Trash2 className="h-4 w-4 text-destructive" />
+                    {deleteFilm.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-4 w-4" />
+                    )}
                   </Button>
                 </div>
               ))}

@@ -40,7 +40,7 @@ export default function App() {
   const { identity } = useInternetIdentity();
   const [userRole, setUserRole] = useState<UserRole | null>(null);
   const [roleLoaded, setRoleLoaded] = useState(false);
-  const [adminAssigned, setAdminAssigned] = useState<boolean | null>(null);
+  const [adminAssigned, setAdminAssigned] = useState<boolean>(true); // default true = hide banner until confirmed
   const [isClaiming, setIsClaiming] = useState(false);
 
   useEffect(() => {
@@ -54,12 +54,12 @@ export default function App() {
         })
         .catch(() => {
           setUserRole(UserRoleEnum.guest);
-          setAdminAssigned(false);
+          setAdminAssigned(true);
           setRoleLoaded(true);
         });
     } else if (!identity) {
       setUserRole(null);
-      setAdminAssigned(null);
+      setAdminAssigned(true);
       setRoleLoaded(false);
     }
   }, [actor, identity]);
@@ -70,22 +70,16 @@ export default function App() {
     try {
       const result = await actor.claimFirstAdmin();
       if (result === true) {
-        const [role, assigned] = await Promise.all([
-          actor.getCallerUserRole(),
-          actor.hasAdminBeenAssigned(),
-        ]);
+        const role = await actor.getCallerUserRole();
         setUserRole(role);
-        setAdminAssigned(assigned);
+        setAdminAssigned(true);
         toast.success("You are now the admin! Opening Admin Dashboard...");
         setPage({ name: "admin" });
       } else {
         toast.error("Admin has already been claimed by another user.");
-        const [role, assigned] = await Promise.all([
-          actor.getCallerUserRole(),
-          actor.hasAdminBeenAssigned(),
-        ]);
+        const role = await actor.getCallerUserRole();
         setUserRole(role);
-        setAdminAssigned(assigned);
+        setAdminAssigned(true);
       }
     } catch {
       toast.error("Failed to claim admin. Please try again.");
@@ -96,10 +90,15 @@ export default function App() {
 
   const navigate = (p: Page) => setPage(p);
 
+  // Show banner only when:
+  // 1. User is signed in
+  // 2. Role data has loaded
+  // 3. No admin has been assigned yet in the system
+  // 4. Current user is not already an admin
   const showClaimBanner =
     !!identity &&
     roleLoaded &&
-    (adminAssigned === false || userRole === UserRoleEnum.guest) &&
+    !adminAssigned &&
     userRole !== UserRoleEnum.admin;
 
   const renderPage = () => {
@@ -152,7 +151,7 @@ export default function App() {
                 <Crown className="h-6 w-6 shrink-0 text-amber-900" />
                 <div>
                   <p className="text-sm font-bold text-amber-950">
-                    🎬 No admin yet — be the first to claim admin access!
+                    🎬 Claim Admin Access for STARWAVE CREATIONS!
                   </p>
                   <p className="text-xs text-amber-800">
                     Manage content, users, and revenue for STARWAVE CREATIONS.

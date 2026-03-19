@@ -16,7 +16,7 @@ export default {
     },
     extend: {
       fontFamily: {
-        display: ['Playfair Display', 'serif'],
+        display: ['Bricolage Grotesque', 'system-ui', 'sans-serif'],
         sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
       },
       colors: {
@@ -75,6 +75,14 @@ export default {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
+      },
+      boxShadow: {
+        "glow-blue": "0 0 20px oklch(0.65 0.25 270 / 0.4), 0 4px 16px oklch(0.10 0.05 270 / 0.8)",
+        "glow-purple": "0 0 24px oklch(0.55 0.22 295 / 0.45), 0 8px 32px oklch(0.10 0.05 270 / 0.9)",
+        "glow-cyan": "0 0 16px oklch(0.72 0.20 225 / 0.35)",
+        "card": "0 4px 24px oklch(0.10 0.05 270 / 0.7), 0 1px 0 oklch(0.65 0.25 270 / 0.15) inset",
+        "header": "0 2px 32px oklch(0.10 0.05 270 / 0.9)",
+        "inner-glow": "inset 0 1px 0 oklch(0.65 0.25 270 / 0.2)",
       },
       keyframes: {
         "accordion-down": {
